@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Lift planned-route matching POC" />
+    <title>Lift — Route Match POC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#top" aria-label="Lift home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>lift<span class="brand-dot">.</span></span>
+        </a>
+
+        <div class="pilot-pill"><span class="pulse-dot"></span><span>Planned-route POC</span></div>
+
+        <nav class="workspace-nav" aria-label="Workspaces">
+          <button class="nav-item active" data-workspace="passenger"><span class="nav-icon">⌖</span><span>Passenger</span></button>
+          <button class="nav-item" data-workspace="driver"><span class="nav-icon">◉</span><span>Driver console</span></button>
+          <button class="nav-item" data-workspace="ops"><span class="nav-icon">▦</span><span>Operations</span></button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <section class="route-health" aria-labelledby="route-health-title">
+          <div class="eyebrow" id="route-health-title">Pilot control</div>
+          <div class="health-row"><span>Paid rides</span><span class="state-off">OFF</span></div>
+          <div class="health-row"><span>Roaming mode</span><span class="state-off">OFF</span></div>
+          <div class="health-row"><span>Planned routes</span><span class="state-on">ON</span></div>
+        </section>
+        <button class="help-button" id="helpButton"><span>?</span> How this POC works</button>
+      </aside>
+
+      <main id="top">
+        <header class="topbar">
+          <div class="breadcrumb"><span>Coimbatore pilot</span><span class="slash">/</span><strong id="workspaceLabel">Passenger booking</strong></div>
+          <div class="topbar-actions"><span class="live-status"><span class="pulse-dot"></span> Simulated live data</span><button class="icon-button" id="themeToggle" aria-label="Toggle contrast">◐</button><button class="avatar" aria-label="Current user">A</button></div>
+        </header>
+
+        <section class="safety-banner" role="note" id="safetyBanner"><span class="banner-icon">✦</span><p><strong>Controlled technical pilot.</strong> No payment, roaming, real KYC, or real-world ride dispatch is enabled.</p><button id="bannerClose" aria-label="Dismiss notice">×</button></section>
+
+        <section class="workspace active" id="passengerWorkspace" aria-labelledby="passengerTitle">
+          <div class="heading-row">
+            <div><p class="eyebrow">Find a compatible planned route</p><h1 id="passengerTitle">Where are you going?</h1><p class="subheading">Only onward stops on a driver’s existing route are eligible.</p></div>
+            <div class="date-chip"><span>◷</span><span id="pilotTime">Today · 8:20 AM</span></div>
+          </div>
+
+          <div class="passenger-grid">
+            <section class="booking-card card" aria-labelledby="ride-search-title">
+              <div class="card-title-row"><div><p class="eyebrow">Ride request</p><h2 id="ride-search-title">Plan your pickup</h2></div><span class="request-id">RQ-2048</span></div>
+              <form id="rideSearchForm">
+                <div class="location-stack">
+                  <span class="route-line" aria-hidden="true"></span>
+                  <label class="location-field pickup-field"><span class="field-icon pickup-icon"></span><span class="field-content"><span class="field-label">Pickup point</span><select id="pickupSelect" aria-label="Pickup point"></select></span></label>
+                  <label class="location-field drop-field"><span class="field-icon drop-icon"></span><span class="field-content"><span class="field-label">Drop point</span><select id="dropSelect" aria-label="Drop point"></select></span></label>
+                </div>
+                <div class="form-two-col">
+                  <label class="compact-field"><span>Departure</span><select id="departureSelect"><option>8:30 AM · Today</option><option>8:45 AM · Today</option><option>9:00 AM · Today</option></select></label>
+                  <label class="compact-field"><span>Seats</span><select id="seatSelect"><option value="1">1 passenger</option><option value="2">2 passengers</option></select></label>
+                </div>
+                <div class="safe-stop-note"><span>✓</span><p><strong>Safe-stop check</strong><br />Pickup is on the same side of the road. Estimated walk: <span id="walkTime">2 min</span>.</p></div>
+                <button class="primary-button full-width" type="submit"><span>Find compatible routes</span><span>→</span></button>
+              </form>
+            </section>
+
+            <section class="route-map card" aria-labelledby="map-title">
+              <div class="map-header"><div><p class="eyebrow">Route intelligence</p><h2 id="map-title">Gandhipuram → Saravanampatti</h2></div><span class="map-badge">4.8 km corridor</span></div>
+              <div class="map-canvas" id="mapCanvas" aria-label="Simulated planned route map">
+                <div class="map-label label-west">Gandhipuram</div><div class="map-label label-east">Saravanampatti</div><div class="map-road road-a"></div><div class="map-road road-b"></div><div class="map-road road-c"></div>
+                <svg class="route-svg" viewBox="0 0 620 360" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="routeGradient" x1="0%" x2="100%"><stop offset="0%" stop-color="#5fe2bb" /><stop offset="100%" stop-color="#55a5ff" /></linearGradient></defs><path d="M 55 275 C 118 238, 128 260, 183 224 S 250 205, 306 182 S 400 145, 440 165 S 510 138, 570 73" fill="none" stroke="url(#routeGradient)" stroke-width="11" stroke-linecap="round" /><path d="M 55 275 C 118 238, 128 260, 183 224 S 250 205, 306 182 S 400 145, 440 165 S 510 138, 570 73" fill="none" stroke="#d9ffef" stroke-opacity=".55" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 13" /></svg>
+                <div class="route-node node-start" data-stop="Gandhipuram"><span></span><b>G</b></div><div class="route-node node-nava" data-stop="Nava India"><span></span><b>N</b></div><div class="route-node node-peelamedu" data-stop="Peelamedu"><span></span><b>P</b></div><div class="route-node node-hope" data-stop="Hope College"><span></span><b>H</b></div><div class="route-node node-vilankurichi" data-stop="Vilankurichi"><span></span><b>V</b></div><div class="route-node node-end" data-stop="Saravanampatti"><span></span><b>S</b></div>
+                <div class="driver-marker" id="driverMarker" aria-label="Driver Asha current location"><span>◉</span><small>Asha</small></div>
+                <div class="map-legend"><span><i class="legend-route"></i> driver route</span><span><i class="legend-safe"></i> approved stop</span></div>
+              </div>
+              <div class="map-footer"><div><span class="dot-online"></span> Driver last update <strong id="lastUpdate">8 sec ago</strong></div><button class="text-button" id="replayRoute">↻ Replay live route</button></div>
+            </section>
+          </div>
+
+          <section class="matches-section" aria-labelledby="matchesTitle">
+            <div class="section-title-row"><div><p class="eyebrow">Matching results</p><h2 id="matchesTitle">Compatible drivers <span id="matchCount">2</span></h2></div><div class="match-filter"><span>Sorted by</span><strong>Lowest wait</strong>⌄</div></div>
+            <div class="match-layout"><div class="match-list" id="matchList"></div><aside class="match-explainer card" aria-labelledby="matcher-title"><p class="eyebrow">Why this match?</p><h3 id="matcher-title">Forward-only validation</h3><div class="validation-list" id="validationList"></div><div class="score-meter"><div class="score-header"><span>Match confidence</span><strong id="scoreValue">94%</strong></div><div class="meter"><span id="scoreBar"></span></div></div></aside></div>
+          </section>
+
+          <section class="trip-panel card" id="tripPanel" hidden aria-live="polite">
+            <div class="trip-panel-top"><div><p class="eyebrow">Your test ride</p><h2 id="tripStatusTitle">Driver offer pending</h2></div><span class="status-chip waiting" id="tripStatusChip">OFFERED</span></div>
+            <div class="trip-steps" id="tripSteps"></div>
+            <div class="trip-detail-grid"><div class="driver-mini"><span class="driver-avatar">A</span><span><strong id="tripDriverName">Asha K.</strong><small>Verified planned-route driver</small></span></div><div class="eta-block"><span>Pickup ETA</span><strong id="tripEta">12 min</strong></div><div class="otp-block" id="otpBlock"><span>Pickup code</span><strong>Available when driver arrives</strong></div><div class="trip-actions" id="tripActions"></div></div>
+          </section>
+        </section>
+
+        <section class="workspace" id="driverWorkspace" aria-labelledby="driverTitle" hidden>
+          <div class="heading-row"><div><p class="eyebrow">Driver workspace</p><h1 id="driverTitle">Your planned route is live</h1><p class="subheading">Accept passengers only when their stops remain ahead and capacity is available.</p></div><span class="driver-live-chip"><span class="pulse-dot"></span> AVAILABLE</span></div>
+          <div class="driver-grid">
+            <section class="driver-route-card card"><div class="card-title-row"><div><p class="eyebrow">Active route</p><h2>Gandhipuram → Saravanampatti</h2></div><button class="more-button" aria-label="Route options">•••</button></div><div class="progress-rail"><span id="routeProgressBar"></span></div><div class="route-progress-labels"><span>Now · Nava India</span><span>Saravanampatti</span></div><dl class="route-metrics"><div><dt>Departure</dt><dd>8:30 AM</dd></div><div><dt>Current delay</dt><dd class="good-text">On time</dd></div><div><dt>Available seats</dt><dd id="availableSeats">1 of 1</dd></div></dl><div class="mode-control"><span><i class="mode-dot"></i> Planned mode</span><button disabled title="Roaming is disabled in this pilot">Roaming locked</button></div></section>
+            <section class="incoming-offer card"><div class="card-title-row"><div><p class="eyebrow">Incoming request</p><h2 id="offerTitle">Nava India → Peelamedu</h2></div><span class="offer-timer" id="offerTimer">01:20</span></div><div class="offer-person"><span class="passenger-avatar">M</span><span><strong>Maya</strong><small>1 passenger · 4.9 rider score</small></span></div><div class="offer-facts"><span>Pickup ahead <strong id="driverPickupDistance">0.6 km</strong></span><span>Detour <strong>0 min</strong></span><span>Safe stop <strong class="good-text">Confirmed</strong></span></div><div class="offer-actions"><button class="secondary-button" id="declineOffer">Decline</button><button class="primary-button" id="acceptOffer">Accept request <span>→</span></button></div><p class="offer-note">A successful accept atomically holds the seat and invalidates conflicting offers.</p></section>
+          </div>
+          <section class="driver-queue card"><div class="section-title-row"><div><p class="eyebrow">Trip controls</p><h2>Active commitment</h2></div><span class="status-chip neutral" id="driverTripState">NO ACTIVE TRIP</span></div><div class="driver-control-layout"><div class="control-timeline" id="driverTimeline"></div><div class="control-box" id="driverControlBox"><p>No passenger commitment yet.</p><span>Accept a compatible request to begin the POC trip lifecycle.</span></div></div></section>
+        </section>
+
+        <section class="workspace" id="opsWorkspace" aria-labelledby="opsTitle" hidden>
+          <div class="heading-row"><div><p class="eyebrow">Operations control room</p><h1 id="opsTitle">Pilot safety & matching telemetry</h1><p class="subheading">A compact view of the rules that keep a planned-route match safe and auditable.</p></div><button class="secondary-button" id="resetDemo">↻ Reset demo</button></div>
+          <div class="metric-grid"><article class="metric-card card"><span class="metric-label">Active drivers</span><strong>2</strong><small><i class="mini-up">↑</i> Planned corridors only</small></article><article class="metric-card card"><span class="metric-label">Open requests</span><strong id="opsOpenRequests">1</strong><small>1 capacity lock pending</small></article><article class="metric-card card"><span class="metric-label">Match p95</span><strong>0.42s</strong><small class="good-text">Within &lt;1.5s target</small></article><article class="metric-card card"><span class="metric-label">Safety gates passed</span><strong>5/5</strong><small class="good-text">No direction conflicts</small></article></div>
+          <div class="ops-grid"><section class="audit-feed card"><div class="section-title-row"><div><p class="eyebrow">Immutable event log</p><h2>Lifecycle audit</h2></div><span class="live-status"><span class="pulse-dot"></span> live</span></div><ol id="auditLog" class="audit-log"></ol></section><section class="policy-card card"><p class="eyebrow">Server-side launch flags</p><h2>Compliance gates</h2><div class="flag-list"><div><span>PAID_RIDES_ENABLED</span><strong class="state-off">FALSE</strong></div><div><span>ROAMING_ENABLED</span><strong class="state-off">FALSE</strong></div><div><span>PLANNED_ROUTE_ENABLED</span><strong class="state-on">TRUE</strong></div><div><span>VEHICLE_CATEGORY_ENABLED</span><strong class="state-on">PILOT_ONLY</strong></div></div><p class="policy-footnote">The browser can display these values; a production system must enforce them on the server.</p></section></div>
+          <section class="rejection-table card"><div class="section-title-row"><div><p class="eyebrow">Matcher decision trace</p><h2>Candidate evaluation</h2></div><span class="trace-label">request RQ-2048</span></div><div class="table-wrap"><table><thead><tr><th>Candidate</th><th>Forward order</th><th>Road-side safe</th><th>Seats</th><th>Decision</th></tr></thead><tbody id="candidateTable"></tbody></table></div></section>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="help-dialog" id="helpDialog"><button class="dialog-close" id="dialogClose" aria-label="Close">×</button><p class="eyebrow">About this prototype</p><h2>What this demonstrates</h2><p>This is a browser-only simulation of planned-route matching. It deliberately models the most important restrictions: forward-only stops, safe-stop validation, capacity locking, and a separate trip lifecycle.</p><ul><li>No real GPS, people, payments, KYC, or dispatch is involved.</li><li>“Accepted” is a local demo state, not a database transaction.</li><li>Production implementation must enforce every rule server-side with PostgreSQL/PostGIS and authenticated APIs.</li></ul><button class="primary-button" id="dialogDone">Got it</button></dialog>
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

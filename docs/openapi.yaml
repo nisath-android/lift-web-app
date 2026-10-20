@@ -1,0 +1,189 @@
+openapi: 3.1.0
+info:
+  title: Lift planned-route POC API
+  version: 0.1.0
+  description: >-
+    Contract for the production-shaped backend behind the static planned-route
+    matching POC. Mutations require authentication, idempotency, and a version guard.
+servers:
+  - url: https://api.example.invalid/v1
+paths:
+  /rides/search:
+    post:
+      summary: Evaluate planned-route candidates without reserving capacity
+      operationId: searchRides
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideSearchInput'
+      responses:
+        '200':
+          description: Ranked eligible candidates and explainable rejected candidates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+  /ride-requests:
+    post:
+      summary: Create a passenger ride request
+      operationId: createRideRequest
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideSearchInput'
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideRequest'
+  /offers/{offerId}/accept:
+    post:
+      summary: Atomically accept an offer and reserve capacity
+      operationId: acceptOffer
+      parameters:
+        - $ref: '#/components/parameters/OfferId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Booking accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '409':
+          description: Route version changed, offer expired, or seat capacity was claimed
+  /trips/{tripId}/arrived:
+    post:
+      summary: Record driver arrival at the approved pickup
+      operationId: markArrived
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Trip moved to DRIVER_ARRIVED and a bound OTP is generated
+  /trips/{tripId}/pickup/verify:
+    post:
+      summary: Verify the passenger pickup challenge
+      operationId: verifyPickupOtp
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+                  pattern: '^\\d{4,8}$'
+      responses:
+        '200':
+          description: OTP consumed once and trip moved to OTP_VERIFIED
+        '409':
+          description: OTP expired, already used, or trip is in the wrong state
+  /trips/{tripId}/drop/propose:
+    post:
+      summary: Propose the completed drop-off; does not create payment
+      operationId: proposeDrop
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Trip moved to DROP_PROPOSED
+  /trips/{tripId}/drop/confirm:
+    post:
+      summary: Passenger confirms drop completion; does not mark an intent paid
+      operationId: confirmDrop
+      parameters:
+        - $ref: '#/components/parameters/TripId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Trip moved to COMPLETED
+components:
+  parameters:
+    OfferId:
+      name: offerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+  responses:
+    InvalidRequest:
+      description: Invalid stop order, time window, or request fields
+  schemas:
+    RideSearchInput:
+      type: object
+      additionalProperties: false
+      required: [pickupStopId, dropStopId, earliestDepartureAt, latestDepartureAt, seats]
+      properties:
+        pickupStopId: { type: string, format: uuid }
+        dropStopId: { type: string, format: uuid }
+        earliestDepartureAt: { type: string, format: date-time }
+        latestDepartureAt: { type: string, format: date-time }
+        seats: { type: integer, minimum: 1, maximum: 2 }
+    RideRequest:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [OPEN, MATCHED, BOOKED, CANCELLED, EXPIRED] }
+    Candidate:
+      type: object
+      required: [routeId, pickupStopId, dropStopId, score, reasons]
+      properties:
+        routeId: { type: string, format: uuid }
+        pickupStopId: { type: string, format: uuid }
+        dropStopId: { type: string, format: uuid }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        reasons:
+          type: array
+          items: { type: string }
+    SearchResponse:
+      type: object
+      required: [eligible, rejected]
+      properties:
+        eligible:
+          type: array
+          items: { $ref: '#/components/schemas/Candidate' }
+        rejected:
+          type: array
+          items:
+            type: object
+            required: [routeId, reason]
+            properties:
+              routeId: { type: string, format: uuid }
+              reason: { type: string, enum: [WRONG_DIRECTION, PICKUP_BEHIND_DRIVER, CAPACITY_EXHAUSTED, OUTSIDE_ROUTE, TIME_WINDOW_MISS] }
+    Booking:
+      type: object
+      required: [id, routeId, status, seatQty, version]
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        status: { type: string, enum: [OFFERED, DRIVER_EN_ROUTE, DRIVER_ARRIVED, OTP_VERIFIED, DROP_PROPOSED, COMPLETED, CANCELLED] }
+        seatQty: { type: integer, minimum: 1 }
+        version: { type: integer, minimum: 1 }
