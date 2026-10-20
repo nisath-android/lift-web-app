@@ -1,3 +1,7 @@
+.safe-stop-note.unsafe { background: rgba(255,147,136,.08); border-left-color: var(--red); }
+.safe-stop-note.unsafe > span { background: rgba(255,147,136,.16); color: var(--red); }
+.safe-stop-note.unsafe strong { color: #ffd2cc; }
+
 :root {
   --ink: #e9f3fb;
   --muted: #94aabe;

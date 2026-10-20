@@ -2,12 +2,12 @@
   "use strict";
 
   const stops = [
-    { id: "gandhipuram", name: "Gandhipuram Bus Stand", short: "Gandhipuram", walk: 3 },
-    { id: "nava-india", name: "Nava India", short: "Nava India", walk: 2 },
-    { id: "peelamedu", name: "Peelamedu", short: "Peelamedu", walk: 3 },
-    { id: "hope-college", name: "Hope College", short: "Hope College", walk: 4 },
-    { id: "vilankurichi", name: "Vilankurichi", short: "Vilankurichi", walk: 3 },
-    { id: "saravanampatti", name: "Saravanampatti", short: "Saravanampatti", walk: 5 }
+    { id: "gandhipuram", name: "Gandhipuram Bus Stand", short: "Gandhipuram", walk: 3, pickupApproved: true, dropApproved: true, roadSide: "east" },
+    { id: "nava-india", name: "Nava India", short: "Nava India", walk: 2, pickupApproved: true, dropApproved: true, roadSide: "east" },
+    { id: "peelamedu", name: "Peelamedu", short: "Peelamedu", walk: 3, pickupApproved: true, dropApproved: true, roadSide: "east" },
+    { id: "hope-college", name: "Hope College", short: "Hope College", walk: 4, pickupApproved: true, dropApproved: true, roadSide: "west" },
+    { id: "vilankurichi", name: "Vilankurichi", short: "Vilankurichi", walk: 3, pickupApproved: true, dropApproved: true, roadSide: "west" },
+    { id: "saravanampatti", name: "Saravanampatti", short: "Saravanampatti", walk: 5, pickupApproved: true, dropApproved: true, roadSide: "west" }
   ];
 
   const markerPoints = [
@@ -15,29 +15,33 @@
     { left: 63, top: 42 }, { left: 79, top: 36 }, { left: 91, top: 20 }
   ];
 
+  function routeMarkerPoints(driver) {
+    return driver.route.map((stopId) => markerPoints[stops.findIndex((stop) => stop.id === stopId)]).filter(Boolean);
+  }
+
   const initialDrivers = [
     {
       id: "asha", name: "Asha K.", initial: "A", color: "linear-gradient(135deg, #e5a174, #8b4c8a)",
-      route: stops.map((stop) => stop.id), current: 0.15, capacity: 1, reserved: 0,
-      departure: "8:30 AM", wait: 12, pickupKm: 0.6, reliability: 4.9, scoreBase: 94,
+      route: stops.map((stop) => stop.id), current: 0.15, currentLabel: "between Gandhipuram & Nava India", capacity: 1, reserved: 0,
+      departure: "8:30 AM", pickupAtMinutes: 522, wait: 12, pickupKm: 0.6, reliability: 4.9, scoreBase: 94,
       description: "Already travelling via Nava India and Peelamedu", state: "PUBLISHED"
     },
     {
       id: "ram", name: "Ram V.", initial: "R", color: "linear-gradient(135deg, #4d8fe8, #3a497f)",
-      route: stops.map((stop) => stop.id), current: 0.08, capacity: 2, reserved: 0,
-      departure: "8:38 AM", wait: 18, pickupKm: 0.3, reliability: 4.7, scoreBase: 81,
+      route: stops.map((stop) => stop.id), current: 0.08, currentLabel: "leaving Gandhipuram", capacity: 2, reserved: 0,
+      departure: "8:38 AM", pickupAtMinutes: 536, wait: 18, pickupKm: 0.3, reliability: 4.7, scoreBase: 81,
       description: "Planned corridor with a later departure", state: "PUBLISHED"
     },
     {
       id: "reverse", name: "Kiran S.", initial: "K", color: "linear-gradient(135deg, #b177e4, #5b3d8d)",
-      route: [...stops].reverse().map((stop) => stop.id), current: 0.25, capacity: 1, reserved: 0,
-      departure: "8:25 AM", wait: 8, pickupKm: 0.4, reliability: 4.8, scoreBase: 0,
+      route: [...stops].reverse().map((stop) => stop.id), current: 0.25, currentLabel: "between Vilankurichi & Hope College", capacity: 1, reserved: 0,
+      departure: "8:25 AM", pickupAtMinutes: 533, wait: 8, pickupKm: 0.4, reliability: 4.8, scoreBase: 0,
       description: "Reverse direction test route", state: "PUBLISHED"
     },
     {
       id: "full", name: "Meera N.", initial: "M", color: "linear-gradient(135deg, #6bd3c1, #317b93)",
-      route: stops.map((stop) => stop.id), current: 0.05, capacity: 1, reserved: 1,
-      departure: "8:35 AM", wait: 15, pickupKm: 0.5, reliability: 4.8, scoreBase: 0,
+      route: stops.map((stop) => stop.id), current: 0.05, currentLabel: "leaving Gandhipuram", capacity: 1, reserved: 1,
+      departure: "8:35 AM", pickupAtMinutes: 530, wait: 15, pickupKm: 0.5, reliability: 4.8, scoreBase: 0,
       description: "Correct direction but no remaining seats", state: "PUBLISHED"
     }
   ];
@@ -63,7 +67,7 @@
         auditEntry("ROUTE_PUBLISHED", "Asha K. route is available with 1 open seat", "driver")
       ],
       offerSeconds: 80,
-      markerIndex: 1,
+      offerExpired: false,
       lastUpdateSeconds: 8,
       declined: false
     };
@@ -83,10 +87,42 @@
     return driver.route.indexOf(stopId);
   }
 
+  function departureMinutes(value) {
+    const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(value);
+    if (!match) return 0;
+    let hour = Number(match[1]) % 12;
+    if (match[3].toUpperCase() === "PM") hour += 12;
+    return hour * 60 + Number(match[2]);
+  }
+
+  function formatMinutes(value) {
+    const hour24 = Math.floor(value / 60) % 24;
+    const minutes = String(value % 60).padStart(2, "0");
+    const suffix = hour24 >= 12 ? "PM" : "AM";
+    const hour12 = hour24 % 12 || 12;
+    return `${hour12}:${minutes} ${suffix}`;
+  }
+
+  function hasApprovedStops(pickup, drop) {
+    return Boolean(pickup?.pickupApproved && drop?.dropApproved);
+  }
+
+  function pickupEtaMinutes(driver, pickupId) {
+    const targetIndex = requestedStopIndex(driver, pickupId);
+    const baselineIndex = requestedStopIndex(driver, "nava-india");
+    if (targetIndex < 0 || baselineIndex < 0) return driver.pickupAtMinutes;
+    return driver.pickupAtMinutes + (targetIndex - baselineIndex) * 5;
+  }
+
   function evaluateDriver(driver) {
-    const { pickup, drop, seats } = state.request;
+    const { pickup, drop, seats, departure } = state.request;
     const pickupIndex = requestedStopIndex(driver, pickup);
     const dropIndex = requestedStopIndex(driver, drop);
+    const pickupStop = stopById(pickup);
+    const dropStop = stopById(drop);
+    const requestedAt = departureMinutes(departure);
+    const latestPickupAt = requestedAt + 30;
+    const pickupAtMinutes = pickupEtaMinutes(driver, pickup);
     const reasons = [];
     let decision = "eligible";
 
@@ -104,18 +140,28 @@
       decision = "behind-driver";
       reasons.push("Pickup is already behind the driver");
     }
+    if (!hasApprovedStops(pickupStop, dropStop)) {
+      if (decision === "eligible") decision = "unsafe-stop";
+      reasons.push("Pickup or drop is not an approved roadside stop");
+    }
+    if (pickupAtMinutes < requestedAt || pickupAtMinutes > latestPickupAt) {
+      if (decision === "eligible") decision = "time-window";
+      reasons.push(`Pickup at ${formatMinutes(pickupAtMinutes)} misses the requested 30-minute window`);
+    }
     if (driver.capacity - driver.reserved < seats) {
       if (decision === "eligible") decision = "capacity";
       reasons.push("Not enough remaining seat capacity");
     }
     if (decision === "eligible") {
       reasons.push("Pickup and drop are forward on the route");
-      reasons.push("Approved roadside stop is available");
+      reasons.push(`Approved roadside stops are available on the ${pickupStop.roadSide} side`);
       reasons.push(`${driver.capacity - driver.reserved} seat ${driver.capacity - driver.reserved === 1 ? "is" : "are"} available`);
-      reasons.push(`${driver.wait} min pickup ETA fits your time window`);
+      reasons.push(`${formatMinutes(pickupAtMinutes)} pickup ETA fits your time window`);
     }
-    const score = decision === "eligible" ? Math.max(63, driver.scoreBase - Math.max(0, state.request.seats - 1) * 13) : 0;
-    return { driver, pickupIndex, dropIndex, score, reasons, decision };
+    const score = decision === "eligible"
+      ? Math.max(63, driver.scoreBase - Math.floor(Math.abs(pickupAtMinutes - requestedAt) / 6) - Math.max(0, seats - 1) * 13)
+      : 0;
+    return { driver, pickupIndex, dropIndex, pickupAtMinutes, score, reasons, decision, requestedAt, latestPickupAt };
   }
 
   function evaluations() {
@@ -144,6 +190,26 @@
   }
 
   function renderMatches() {
+    if (state.booking) {
+      const booking = state.booking;
+      const driver = getBookingDriver();
+      const pickupName = stopById(booking.pickupStopId).short;
+      const dropName = stopById(booking.dropStopId).short;
+      const tripComplete = booking.state === "COMPLETED";
+      el("matchCount").textContent = "1";
+      el("matchList").innerHTML = `<article class="match-card card selected">
+        <span class="driver-avatar" style="background:${driver.color}">${driver.initial}</span>
+        <div class="match-driver">
+          <div class="match-driver-title"><h3>${driver.name}</h3><span class="verified">● Route snapshot</span><span class="fit-badge">${booking.score}% fit at reservation</span></div>
+          <p>${tripComplete ? "This simulated trip is complete; the route snapshot is retained for review." : "Your selected planned route is frozen while this simulated trip is active."}</p>
+          <div class="match-facts"><span>Leaves <strong>${driver.departure}</strong></span><span>Pickup <strong>${formatMinutes(booking.pickupAtMinutes)}</strong></span><span><strong>${booking.seats}</strong> seat simulated</span><span>${pickupName} → ${dropName}</span></div>
+        </div>
+        <span class="fit-badge">${tripComplete ? "Trip complete" : "Route reserved"}</span>
+      </article>`;
+      renderMatchExplainer();
+      return;
+    }
+
     const matches = eligibleMatches();
     const list = el("matchList");
     el("matchCount").textContent = matches.length;
@@ -153,7 +219,7 @@
     }
 
     list.innerHTML = matches.length
-      ? matches.map(({ driver, score, pickupIndex, dropIndex }) => {
+      ? matches.map(({ driver, score, pickupIndex, dropIndex, pickupAtMinutes }) => {
           const selected = state.selectedDriverId === driver.id;
           const seatsRemaining = driver.capacity - driver.reserved;
           const pickupName = stopById(driver.route[pickupIndex]).short;
@@ -163,7 +229,7 @@
             <div class="match-driver">
               <div class="match-driver-title"><h3>${driver.name}</h3><span class="verified">● Verified route</span><span class="fit-badge">${score}% fit</span></div>
               <p>${driver.description}</p>
-              <div class="match-facts"><span>Leaves <strong>${driver.departure}</strong></span><span>Pickup <strong>${driver.wait} min</strong></span><span><strong>${seatsRemaining}</strong> open seat${seatsRemaining === 1 ? "" : "s"}</span><span>${pickupName} → ${dropName}</span></div>
+              <div class="match-facts"><span>Leaves <strong>${driver.departure}</strong></span><span>Pickup <strong>${formatMinutes(pickupAtMinutes)}</strong></span><span><strong>${seatsRemaining}</strong> open seat${seatsRemaining === 1 ? "" : "s"}</span><span>${pickupName} → ${dropName}</span></div>
             </div>
             <button class="choose-match ${selected ? "reserve-match" : ""}" ${selected ? `data-reserve-driver="${driver.id}"` : `data-select-driver="${driver.id}"`}>${selected ? "Reserve lift →" : "Choose lift"}</button>
           </article>`;
@@ -173,6 +239,14 @@
   }
 
   function renderMatchExplainer() {
+    if (state.booking) {
+      const booking = state.booking;
+      el("matcher-title").textContent = "Booking constraints captured";
+      el("scoreValue").textContent = `${booking.score}%`;
+      el("scoreBar").style.width = `${booking.score}%`;
+      el("validationList").innerHTML = booking.reasons.map((reason) => `<div><i>✓</i><span>${reason}</span></div>`).join("");
+      return;
+    }
     const match = selectedEvaluation();
     const validationList = el("validationList");
     if (!match || match.decision !== "eligible") {
@@ -194,13 +268,15 @@
       "wrong-direction": ["Rejected", "decision-no"],
       "behind-driver": ["Rejected", "decision-no"],
       capacity: ["Capacity full", "decision-no"],
+      "time-window": ["Time miss", "decision-no"],
+      "unsafe-stop": ["Unsafe stop", "decision-no"],
       "outside-route": ["Off route", "decision-no"],
       unavailable: ["Unavailable", "decision-no"]
     };
     el("candidateTable").innerHTML = evaluations().map((result) => {
       const { driver, pickupIndex, dropIndex, decision } = result;
-      const forward = pickupIndex >= 0 && dropIndex > pickupIndex && decision !== "behind-driver";
-      const safe = pickupIndex >= 0 && dropIndex >= 0;
+      const forward = pickupIndex >= 0 && dropIndex > pickupIndex && pickupIndex / (driver.route.length - 1) > driver.current;
+      const safe = pickupIndex >= 0 && dropIndex >= 0 && hasApprovedStops(stopById(state.request.pickup), stopById(state.request.drop));
       const capacity = driver.capacity - driver.reserved >= state.request.seats;
       const [text, style] = labels[decision];
       return `<tr><td><strong>${driver.name}</strong><br><small>${driver.description}</small></td><td class="${forward ? "pass" : "fail"}">${forward ? "✓ yes" : "× no"}</td><td class="${safe ? "pass" : "fail"}">${safe ? "✓ approved" : "× unavailable"}</td><td class="${capacity ? "pass" : "fail"}">${capacity ? "✓ available" : "× full"}</td><td><span class="${style}">${text}</span></td></tr>`;
@@ -216,10 +292,16 @@
     return state.booking ? driverById(state.booking.driverId) : null;
   }
 
+  function activeTripStops() {
+    const pickupId = state.booking?.pickupStopId || state.request.pickup;
+    const dropId = state.booking?.dropStopId || state.request.drop;
+    return { pickup: stopById(pickupId), drop: stopById(dropId) };
+  }
+
   function tripMeta(status) {
     const meta = {
       OFFERED: ["Driver offer pending", "OFFERED", "waiting"],
-      DRIVER_EN_ROUTE: ["Asha is heading to pickup", "DRIVER EN ROUTE", "active"],
+      DRIVER_EN_ROUTE: ["Driver is heading to pickup", "DRIVER EN ROUTE", "active"],
       DRIVER_ARRIVED: ["Driver is at the approved pickup point", "AT PICKUP", "active"],
       OTP_VERIFIED: ["Pickup confirmed — trip in progress", "IN PROGRESS", "active"],
       DROP_PROPOSED: ["Driver proposed your drop-off", "DROP PROPOSED", "waiting"],
@@ -245,14 +327,16 @@
     chip.textContent = label;
     chip.className = `status-chip ${style}`;
     el("tripDriverName").textContent = driver.name;
-    el("tripEta").textContent = booking.state === "COMPLETED" ? "—" : booking.state === "DRIVER_ARRIVED" ? "Arrived" : `${driver.wait} min`;
+    el("tripEta").textContent = booking.state === "COMPLETED" ? "—" : booking.state === "DRIVER_ARRIVED" ? "Arrived" : ["OTP_VERIFIED", "DROP_PROPOSED"].includes(booking.state) ? "Verified" : formatMinutes(booking.pickupAtMinutes);
 
     const steps = ["Matched", "En route", "At pickup", "In trip", "Complete"];
     const currentIndex = bookingStepIndex(booking.state);
     el("tripSteps").innerHTML = steps.map((step, index) => `<div class="trip-step ${index < currentIndex ? "done" : ""} ${index === currentIndex ? "current" : ""}"><i>${index < currentIndex ? "✓" : ""}</i><span>${step}</span></div>`).join("");
 
     const otpBlock = el("otpBlock");
-    if (booking.state === "DRIVER_ARRIVED") {
+    if (booking.state === "DRIVER_ARRIVED" && booking.otpLocked) {
+      otpBlock.innerHTML = `<span>Pickup code</span><strong>Verification unavailable</strong>`;
+    } else if (booking.state === "DRIVER_ARRIVED") {
       otpBlock.innerHTML = `<span>Pickup code</span><strong class="otp-code">${booking.otp}</strong>`;
     } else if (["OTP_VERIFIED", "DROP_PROPOSED", "COMPLETED"].includes(booking.state)) {
       otpBlock.innerHTML = `<span>Pickup code</span><strong>Verified ✓</strong>`;
@@ -263,7 +347,7 @@
     const actions = el("tripActions");
     if (booking.state === "OFFERED") actions.innerHTML = `<span class="waiting-copy">Waiting for driver acceptance</span>`;
     else if (booking.state === "DRIVER_EN_ROUTE") actions.innerHTML = `<button class="secondary-button" data-workspace-go="driver">View driver console</button>`;
-    else if (booking.state === "DRIVER_ARRIVED") actions.innerHTML = `<span class="waiting-copy">Share the code only after meeting the driver.</span>`;
+    else if (booking.state === "DRIVER_ARRIVED") actions.innerHTML = `<span class="waiting-copy">${booking.otpLocked ? "Verification is locked; reset the demo to start again." : "Share the code only after meeting the driver."}</span>`;
     else if (booking.state === "OTP_VERIFIED") actions.innerHTML = `<span class="waiting-copy">Trip status is simulated in this POC.</span>`;
     else if (booking.state === "DROP_PROPOSED") actions.innerHTML = `<button class="primary-button" data-confirm-drop>Confirm demo drop <span>→</span></button>`;
     else actions.innerHTML = `<span class="waiting-copy">No payment is collected in this pilot.</span>`;
@@ -271,20 +355,29 @@
 
   function renderDriverWorkspace() {
     const driver = state.booking ? getBookingDriver() : driverById(state.selectedDriverId || "asha");
-    const relevant = state.booking ? evaluateDriver(driver) : selectedEvaluation();
-    const pickup = stopById(state.request.pickup);
-    const drop = stopById(state.request.drop);
+    const { pickup, drop } = activeTripStops();
+    const requestedSeats = state.booking?.seats || state.request.seats;
+    const compatibleRequest = selectedEvaluation()?.decision === "eligible";
     const available = driver.capacity - driver.reserved;
     el("availableSeats").textContent = `${available} of ${driver.capacity}`;
     el("routeProgressBar").style.width = `${Math.round(driver.current * 100)}%`;
+    el("driverDeparture").textContent = driver.departure;
+    el("driverPosition").textContent = `Now · ${driver.currentLabel}`;
+    el("driverRouteName").textContent = `${stopById(driver.route[0]).short} → ${stopById(driver.route.at(-1)).short}`;
+    el("driverRouteEnd").textContent = stopById(driver.route.at(-1)).short;
     const incoming = bySelector(".incoming-offer");
 
-    if (!state.booking && !state.declined) {
-      incoming.innerHTML = `<div class="card-title-row"><div><p class="eyebrow">Incoming request</p><h2 id="offerTitle">${pickup.short} → ${drop.short}</h2></div><span class="offer-timer" id="offerTimer">${timerText(state.offerSeconds)}</span></div><div class="offer-person"><span class="passenger-avatar">M</span><span><strong>Maya</strong><small>${state.request.seats} passenger${state.request.seats === 1 ? "" : "s"} · 4.9 rider score</small></span></div><div class="offer-facts"><span>Pickup ahead <strong id="driverPickupDistance">${driver.pickupKm.toFixed(1)} km</strong></span><span>Detour <strong>0 min</strong></span><span>Safe stop <strong class="good-text">Confirmed</strong></span></div><div class="offer-actions"><button class="secondary-button" id="declineOffer">Decline</button><button class="primary-button" id="acceptOffer">Accept request <span>→</span></button></div><p class="offer-note">A successful accept atomically holds the seat and invalidates conflicting offers.</p>`;
+    if (!state.booking && state.offerExpired) {
+      incoming.innerHTML = `<p class="eyebrow">Incoming request</p><h2>Offer expired</h2><p class="empty-card-copy">The provisional offer has been released. No seat was reserved.</p><button class="secondary-button" data-reset-offer>Restore demo offer</button>`;
+    } else if (!state.booking && !state.declined && compatibleRequest) {
+      incoming.innerHTML = `<div class="card-title-row"><div><p class="eyebrow">Incoming request</p><h2 id="offerTitle">${pickup.short} → ${drop.short}</h2></div><span class="offer-timer" id="offerTimer">${timerText(state.offerSeconds)}</span></div><div class="offer-person"><span class="passenger-avatar">M</span><span><strong>Maya</strong><small>${requestedSeats} passenger${requestedSeats === 1 ? "" : "s"} · 4.9 rider score</small></span></div><div class="offer-facts"><span>Pickup ahead <strong id="driverPickupDistance">${driver.pickupKm.toFixed(1)} km</strong></span><span>Detour <strong>0 min</strong></span><span>Safe stop <strong class="good-text">Confirmed</strong></span></div><div class="offer-actions"><button class="secondary-button" id="declineOffer">Decline</button><button class="primary-button" id="acceptOffer">Accept request <span>→</span></button></div><p class="offer-note">This browser simulates a reservation. Production must atomically lock capacity in the API.</p>`;
     } else if (state.declined) {
       incoming.innerHTML = `<p class="eyebrow">Incoming request</p><h2>Offer released</h2><p class="empty-card-copy">The request returned to matching. No seat was reserved.</p><button class="secondary-button" data-reset-offer>Restore demo offer</button>`;
+    } else if (!state.booking) {
+      incoming.innerHTML = `<p class="eyebrow">Incoming request</p><h2>No compatible request</h2><p class="empty-card-copy">This request does not currently pass all planned-route checks.</p><button class="secondary-button" data-workspace-go="passenger">Adjust request</button>`;
     } else {
-      incoming.innerHTML = `<p class="eyebrow">Committed booking</p><h2>${pickup.short} → ${drop.short}</h2><div class="offer-person"><span class="passenger-avatar">M</span><span><strong>Maya</strong><small>${state.request.seats} seat locked · request RQ-2048</small></span></div><div class="safe-stop-note"><span>✓</span><p><strong>Route commitment preserved</strong><br />Future matches cannot use this reserved seat.</p></div><p class="offer-note">Forward-order, safe-stop, and capacity rules were validated before this seat was committed.</p>`;
+      const capacityNote = state.booking.state === "COMPLETED" ? "The simulated capacity lock was released after trip completion." : "Future matches cannot use this simulated reservation.";
+      incoming.innerHTML = `<p class="eyebrow">Committed booking</p><h2>${pickup.short} → ${drop.short}</h2><div class="offer-person"><span class="passenger-avatar">M</span><span><strong>Maya</strong><small>${requestedSeats} seat simulated · request RQ-2048</small></span></div><div class="safe-stop-note"><span>✓</span><p><strong>Route commitment preserved</strong><br />${capacityNote}</p></div><p class="offer-note">Forward-order, safe-stop, time-window, and capacity rules were validated before this seat was committed.</p>`;
     }
 
     const timeline = el("driverTimeline");
@@ -304,17 +397,19 @@
     el("driverTripState").className = `status-chip ${tripMeta(booking.state)[2]}`;
 
     if (booking.state === "OFFERED") {
-      controlBox.innerHTML = `<p>Passenger has chosen this lift.</p><span>Accept to atomically reserve ${state.request.seats} seat${state.request.seats === 1 ? "" : "s"}.</span><button class="primary-button" id="acceptOffer">Accept booking <span>→</span></button>`;
+      controlBox.innerHTML = `<p>Passenger has chosen this lift.</p><span>Accept to simulate a ${booking.seats}-seat reservation. Production uses an API transaction.</span><button class="primary-button" id="acceptOffer">Accept booking <span>→</span></button>`;
     } else if (booking.state === "DRIVER_EN_ROUTE") {
       controlBox.innerHTML = `<p>Navigate to ${pickup.short}.</p><span>Only mark arrival at the approved pickup point.</span><button class="primary-button" data-mark-arrived>I’m at pickup <span>→</span></button>`;
+    } else if (booking.state === "DRIVER_ARRIVED" && booking.otpLocked) {
+      controlBox.innerHTML = `<p>Pickup verification locked.</p><span>The browser-demo OTP expired or reached its three-attempt limit. Reset the demo to retry.</span>`;
     } else if (booking.state === "DRIVER_ARRIVED") {
-      controlBox.innerHTML = `<p>Verify passenger pickup code.</p><span>OTP is valid for this single simulated booking.</span><div class="otp-verify"><input id="otpInput" inputmode="numeric" maxlength="4" placeholder="4-digit code" aria-label="Pickup code"/><button class="primary-button" data-verify-otp>Verify</button></div>`;
+      controlBox.innerHTML = `<p>Verify passenger pickup code.</p><span>Browser demo only: one code, two-minute expiry, and three attempts.</span><div class="otp-verify"><input id="otpInput" inputmode="numeric" maxlength="4" placeholder="4-digit code" aria-label="Pickup code"/><button class="primary-button" data-verify-otp>Verify</button></div>`;
     } else if (booking.state === "OTP_VERIFIED") {
       controlBox.innerHTML = `<p>Passenger pickup verified.</p><span>Trip is in progress. Complete only at the approved drop point.</span><button class="primary-button" data-propose-drop>Finish at drop <span>→</span></button>`;
     } else if (booking.state === "DROP_PROPOSED") {
       controlBox.innerHTML = `<p>Drop-off proposed to passenger.</p><span>Wait for passenger confirmation. Payment remains disabled.</span>`;
     } else {
-      controlBox.innerHTML = `<p>Demo lifecycle complete.</p><span>Event log retains the state transition record.</span>`;
+      controlBox.innerHTML = `<p>Demo lifecycle complete.</p><span>The browser-local trace retains the state transition record.</span>`;
     }
   }
 
@@ -324,23 +419,47 @@
     return `${minutes}:${seconds}`;
   }
 
+  function renderSafeStopNote(pickupId = state.request.pickup, dropId = state.request.drop) {
+    const pickup = stopById(pickupId);
+    const drop = stopById(dropId);
+    const safe = hasApprovedStops(pickup, drop);
+    const note = el("safeStopNote");
+    note.classList.toggle("unsafe", !safe);
+    note.innerHTML = safe
+      ? `<span>✓</span><p><strong>Safe-stop check</strong><br />Pickup is on the ${pickup.roadSide} side of the road. Estimated walk: <span id="walkTime">${pickup.walk} min</span>.</p>`
+      : `<span>!</span><p><strong>Pickup cannot be used</strong><br />Choose an approved roadside pickup and drop point.</p>`;
+  }
+
   function syncMap() {
     const driver = state.booking ? getBookingDriver() : driverById(state.selectedDriverId || "asha");
+    const routePoints = routeMarkerPoints(driver);
     const progress = Math.max(0, Math.min(1, driver.current));
-    const index = Math.min(markerPoints.length - 1, Math.max(0, Math.round(progress * (markerPoints.length - 1))));
+    const progressPoint = progress * (routePoints.length - 1);
+    const lower = Math.floor(progressPoint);
+    const upper = Math.min(routePoints.length - 1, lower + 1);
+    const between = progressPoint - lower;
+    const point = {
+      left: routePoints[lower].left + (routePoints[upper].left - routePoints[lower].left) * between,
+      top: routePoints[lower].top + (routePoints[upper].top - routePoints[lower].top) * between
+    };
     const marker = el("driverMarker");
-    marker.style.left = `${markerPoints[index].left}%`;
-    marker.style.top = `${markerPoints[index].top}%`;
+    marker.style.left = `${point.left}%`;
+    marker.style.top = `${point.top}%`;
     marker.querySelector("small").textContent = driver.name.split(" ")[0];
+    marker.setAttribute("aria-label", `Driver ${driver.name} current location`);
+    const { pickup, drop } = activeTripStops();
     document.querySelectorAll(".route-node").forEach((node) => {
-      node.dataset.selected = [stopById(state.request.pickup).short, stopById(state.request.drop).short].includes(node.dataset.stop) ? "true" : "false";
+      node.dataset.selected = [pickup.short, drop.short].includes(node.dataset.stop) ? "true" : "false";
     });
-    el("walkTime").textContent = `${stopById(state.request.pickup).walk} min`;
+    const walkTime = el("walkTime");
+    if (walkTime) walkTime.textContent = `${stopById(state.request.pickup).walk} min`;
     el("lastUpdate").textContent = `${state.lastUpdateSeconds} sec ago`;
+    el("map-title").textContent = `${stopById(driver.route[0]).short} → ${stopById(driver.route.at(-1)).short}`;
   }
 
   function renderAll() {
     setOptions();
+    renderSafeStopNote();
     renderMatches();
     renderTripPanel();
     renderDriverWorkspace();
@@ -358,6 +477,10 @@
   }
 
   function beginOffer(driverId = state.selectedDriverId) {
+    if (state.offerExpired) {
+      showToast("Offer expired", "Restore the demo offer before reserving a route.", "error");
+      return;
+    }
     const evaluation = evaluations().find((result) => result.driver.id === driverId);
     if (!evaluation || evaluation.decision !== "eligible") {
       showToast("Cannot reserve this route", "The route no longer passes all planned-match checks.", "error");
@@ -368,7 +491,22 @@
       return;
     }
     state.selectedDriverId = driverId;
-    state.booking = { driverId, state: "OFFERED", otp: null, attempts: 0 };
+    state.booking = {
+      driverId,
+      state: "OFFERED",
+      otp: null,
+      attempts: 0,
+      score: evaluation.score,
+      reasons: [...evaluation.reasons],
+      pickupStopId: state.request.pickup,
+      dropStopId: state.request.drop,
+      pickupIndex: evaluation.pickupIndex,
+      dropIndex: evaluation.dropIndex,
+      seats: state.request.seats,
+      pickupAtMinutes: evaluation.pickupAtMinutes,
+      requestedAt: evaluation.requestedAt,
+      latestPickupAt: evaluation.latestPickupAt
+    };
     addAudit("OFFER_CREATED", `${evaluation.driver.name} received a seat-hold offer for RQ-2048`, "matcher");
     renderAll();
     showToast("Lift selected", "Driver acceptance is required before the seat is reserved.");
@@ -378,35 +516,61 @@
     if (!state.booking) beginOffer();
     if (!state.booking) return;
     const driver = getBookingDriver();
-    if (driver.capacity - driver.reserved < state.request.seats) {
+    if (driver.capacity - driver.reserved < state.booking.seats) {
       showToast("Seat lock failed", "Another booking used the remaining capacity.", "error");
       return;
     }
-    driver.reserved += state.request.seats;
+    driver.reserved += state.booking.seats;
     state.booking.state = "DRIVER_EN_ROUTE";
-    addAudit("BOOKING_ACCEPTED", `${driver.name} accepted; ${state.request.seats} seat lock committed`, "driver");
+    addAudit("BOOKING_ACCEPTED", `${driver.name} accepted; ${state.booking.seats} seat simulation committed`, "driver");
     renderAll();
-    showToast("Seat reserved", "Conflicting offers were invalidated in this demo.");
+    showToast("Seat reservation simulated", "One seat is locked in this browser demo only.");
   }
 
   function markArrived() {
     if (!state.booking || state.booking.state !== "DRIVER_EN_ROUTE") return;
     state.booking.state = "DRIVER_ARRIVED";
     state.booking.otp = String(Math.floor(1000 + Math.random() * 9000));
-    state.markerIndex = stops.findIndex((stop) => stop.id === state.request.pickup);
+    state.booking.otpLocked = false;
+    state.booking.otpExpiresAt = Date.now() + 120000;
     const driver = getBookingDriver();
-    driver.current = Math.max(driver.current, state.markerIndex / (stops.length - 1));
+    driver.current = Math.max(driver.current, state.booking.pickupIndex / (driver.route.length - 1));
+    driver.currentLabel = stopById(state.booking.pickupStopId).short;
     addAudit("DRIVER_ARRIVED", `${driver.name} reached the approved pickup stop`, "driver");
     renderAll();
     showToast("Arrival recorded", "Pickup code is now visible to the passenger.");
+    const bookingReference = state.booking;
+    setTimeout(() => {
+      if (state.booking !== bookingReference || state.booking.state !== "DRIVER_ARRIVED" || state.booking.otpLocked) return;
+      state.booking.otpLocked = true;
+      state.booking.otpExpired = true;
+      addAudit("OTP_EXPIRED", "Pickup OTP expired after two minutes without verification", "system");
+      renderAll();
+      showToast("Pickup code expired", "Reset the demo to issue a new code.", "error");
+    }, 120000);
   }
 
   function verifyOtp() {
-    const input = el("otpInput");
     if (!state.booking || state.booking.state !== "DRIVER_ARRIVED") return;
+    if (state.booking.otpLocked || Date.now() > state.booking.otpExpiresAt) {
+      state.booking.otpLocked = true;
+      state.booking.otpExpired = true;
+      addAudit("OTP_EXPIRED", "Pickup OTP could not be verified after its validity window", "system");
+      renderAll();
+      showToast("Pickup code expired", "Reset the demo to issue a new code.", "error");
+      return;
+    }
+    const input = el("otpInput");
     if (input.value.trim() !== state.booking.otp) {
       state.booking.attempts += 1;
       addAudit("OTP_REJECTED", `Incorrect pickup code; attempt ${state.booking.attempts}`, "driver");
+      if (state.booking.attempts >= 3) {
+        state.booking.otpLocked = true;
+        addAudit("OTP_LOCKED", "Pickup OTP locked after three incorrect attempts", "system");
+        renderAll();
+        showToast("Verification locked", "Reset the demo to issue a new code.", "error");
+        return;
+      }
       showToast("Code did not match", `Attempt ${state.booking.attempts} recorded.`, "error");
       input.value = "";
       return;
@@ -421,7 +585,8 @@
     if (!state.booking || state.booking.state !== "OTP_VERIFIED") return;
     state.booking.state = "DROP_PROPOSED";
     const driver = getBookingDriver();
-    driver.current = 1;
+    driver.current = Math.max(driver.current, state.booking.dropIndex / (driver.route.length - 1));
+    driver.currentLabel = stopById(state.booking.dropStopId).short;
     addAudit("DROP_PROPOSED", "Driver proposed the approved drop-off; payment remains disabled", "driver");
     renderAll();
     showToast("Drop-off proposed", "Passenger confirmation is needed to close this demo.");
@@ -429,8 +594,13 @@
 
   function confirmDrop() {
     if (!state.booking || state.booking.state !== "DROP_PROPOSED") return;
+    const driver = getBookingDriver();
     state.booking.state = "COMPLETED";
-    addAudit("TRIP_COMPLETED", "Passenger confirmed demo drop; no payment intent created", "passenger");
+    if (!state.booking.capacityReleased) {
+      driver.reserved = Math.max(0, driver.reserved - state.booking.seats);
+      state.booking.capacityReleased = true;
+    }
+    addAudit("TRIP_COMPLETED", "Passenger confirmed demo drop; simulated capacity released and no payment intent created", "passenger");
     renderAll();
     showToast("Demo trip completed", "No payment was created or collected.");
   }
@@ -442,6 +612,16 @@
     addAudit("OFFER_DECLINED", "Driver declined the provisional route offer", "driver");
     renderAll();
     showToast("Offer released", "No capacity change was made.");
+  }
+
+  function restoreOffer() {
+    state.declined = false;
+    state.offerExpired = false;
+    state.offerSeconds = 80;
+    state.selectedDriverId = eligibleMatches()[0]?.driver.id || null;
+    addAudit("OFFER_RESTORED", "Demo offer restored; no capacity was changed", "system");
+    renderAll();
+    showToast("Demo offer restored", "The 80-second simulated offer window restarted.");
   }
 
   function resetDemo() {
@@ -471,6 +651,9 @@
       departure: el("departureSelect").value
     };
     state.declined = false;
+    state.offerExpired = false;
+    state.offerSeconds = 80;
+    state.selectedDriverId = eligibleMatches()[0]?.driver.id || null;
     const matchCount = eligibleMatches().length;
     addAudit("MATCHER_EVALUATED", `Request checked; ${matchCount} eligible planned route${matchCount === 1 ? "" : "s"}`, "matcher");
     renderAll();
@@ -479,13 +662,15 @@
 
   function replayRoute() {
     const marker = el("driverMarker");
+    const driver = state.booking ? getBookingDriver() : driverById(state.selectedDriverId || "asha");
+    const routePoints = routeMarkerPoints(driver);
     marker.style.transition = "left .5s ease, top .5s ease";
     let index = 0;
     const interval = setInterval(() => {
-      marker.style.left = `${markerPoints[index].left}%`;
-      marker.style.top = `${markerPoints[index].top}%`;
+      marker.style.left = `${routePoints[index].left}%`;
+      marker.style.top = `${routePoints[index].top}%`;
       index += 1;
-      if (index === markerPoints.length) {
+      if (index === routePoints.length) {
         clearInterval(interval);
         setTimeout(() => { marker.style.transition = "left 1.1s cubic-bezier(.22,.9,.35,1), top 1.1s cubic-bezier(.22,.9,.35,1)"; syncMap(); }, 600);
       }
@@ -505,7 +690,7 @@
       if (workspace) { switchWorkspace(workspace.dataset.workspaceGo); return; }
       if (event.target.closest("#acceptOffer")) { acceptOffer(); return; }
       if (event.target.closest("#declineOffer")) { declineOffer(); return; }
-      if (event.target.closest("[data-reset-offer]")) { state.declined = false; renderAll(); return; }
+      if (event.target.closest("[data-reset-offer]")) { restoreOffer(); return; }
       if (event.target.closest("[data-mark-arrived]")) { markArrived(); return; }
       if (event.target.closest("[data-verify-otp]")) { verifyOtp(); return; }
       if (event.target.closest("[data-propose-drop]")) { proposeDrop(); return; }
@@ -518,7 +703,9 @@
     el("dialogDone").addEventListener("click", () => el("helpDialog").close());
     el("themeToggle").addEventListener("click", () => document.body.classList.toggle("high-contrast"));
     el("bannerClose").addEventListener("click", () => el("safetyBanner").remove());
-    el("pickupSelect").addEventListener("change", () => { el("walkTime").textContent = `${stopById(el("pickupSelect").value).walk} min`; });
+    const previewSafeStop = () => renderSafeStopNote(el("pickupSelect").value, el("dropSelect").value);
+    el("pickupSelect").addEventListener("change", previewSafeStop);
+    el("dropSelect").addEventListener("change", previewSafeStop);
   }
 
   function runClock() {
@@ -526,10 +713,16 @@
       state.lastUpdateSeconds = state.lastUpdateSeconds >= 19 ? 4 : state.lastUpdateSeconds + 1;
       const last = el("lastUpdate");
       if (last) last.textContent = `${state.lastUpdateSeconds} sec ago`;
-      if (!state.booking && !state.declined && state.offerSeconds > 0) {
+      if (!state.booking && !state.declined && !state.offerExpired && state.offerSeconds > 0) {
         state.offerSeconds -= 1;
         const timer = el("offerTimer");
         if (timer) timer.textContent = timerText(state.offerSeconds);
+        if (state.offerSeconds === 0) {
+          state.offerExpired = true;
+          addAudit("OFFER_EXPIRED", "Provisional offer expired; no capacity reservation was made", "system");
+          renderAll();
+          showToast("Offer expired", "No seat was reserved.", "error");
+        }
       }
     }, 1000);
   }
