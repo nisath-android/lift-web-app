@@ -245,6 +245,10 @@ Deno.serve(async (request: Request) => {
         functionName = "accept_offer";
         args = { p_offer_id: requireUuid(payload, "offerId"), p_idempotency_key: requireIdempotencyKey(body) };
         break;
+      case "list-driver-offers":
+        functionName = "list_driver_offers";
+        args = {};
+        break;
       case "driver-arrived":
         functionName = "mark_driver_arrived";
         args = { p_booking_id: requireUuid(payload, "bookingId"), p_idempotency_key: requireIdempotencyKey(body) };

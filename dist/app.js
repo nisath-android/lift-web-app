@@ -49,6 +49,7 @@
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const defaultRequest = { pickup: "nava-india", drop: "peelamedu", seats: 1, departure: "8:30 AM · Today" };
   let state;
+  const live = () => window.LiftLive;
 
   const el = (id) => document.getElementById(id);
   const bySelector = (selector) => document.querySelector(selector);
@@ -69,7 +70,10 @@
       offerSeconds: 80,
       offerExpired: false,
       lastUpdateSeconds: 8,
-      declined: false
+      declined: false,
+      liveRequestId: null,
+      liveOffers: null,
+      liveSelectedOffer: null
     };
   }
 
@@ -190,6 +194,10 @@
   }
 
   function renderMatches() {
+    if (state.liveOffers !== null) {
+      renderLiveMatches();
+      return;
+    }
     if (state.booking) {
       const booking = state.booking;
       const driver = getBookingDriver();
@@ -236,6 +244,35 @@
         }).join("")
       : `<div class="no-match card"><strong>No compatible planned route</strong><span>Try a later time, another approved stop, or one passenger.</span></div>`;
     renderMatchExplainer();
+  }
+
+  function renderLiveMatches() {
+    const list = el("matchList");
+    const selected = state.liveSelectedOffer;
+    const offers = state.liveOffers || [];
+    el("matchCount").textContent = selected ? "1" : String(offers.length);
+    if (selected) {
+      list.innerHTML = `<article class="match-card card selected"><span class="driver-avatar">${escapeHtml(selected.driverName.slice(0, 1).toUpperCase())}</span><div class="match-driver"><div class="match-driver-title"><h3>${escapeHtml(selected.driverName)}</h3><span class="verified">● Live route offer</span><span class="fit-badge">${selected.score}% fit</span></div><p>Your selected offer is now waiting for the assigned driver to accept it server-side.</p><div class="match-facts"><span>Pickup <strong>${formatLiveTime(selected.pickupEta)}</strong></span><span>Drop <strong>${formatLiveTime(selected.dropEta)}</strong></span><span><strong>${selected.seatQty}</strong> requested seat</span></div></div><span class="fit-badge">SELECTED</span></article>`;
+      renderLiveExplainer("Offer selected", ["Server-side route snapshot retained", "Driver must atomically accept capacity", "No browser seat reservation is created"]);
+      return;
+    }
+    list.innerHTML = offers.length ? offers.map((offer) => `<article class="match-card card"><span class="driver-avatar">${escapeHtml(offer.driverName.slice(0, 1).toUpperCase())}</span><div class="match-driver"><div class="match-driver-title"><h3>${escapeHtml(offer.driverName)}</h3><span class="verified">● Live approved route</span><span class="fit-badge">${offer.score}% fit</span></div><p>Real backend match. The driver can only accept after you select this offer.</p><div class="match-facts"><span>Pickup <strong>${formatLiveTime(offer.pickupEta)}</strong></span><span>Drop <strong>${formatLiveTime(offer.dropEta)}</strong></span><span><strong>${offer.seatQty}</strong> requested seat</span></div></div><button class="choose-match reserve-match" data-select-live-offer="${offer.offerId}">Select live offer →</button></article>`).join("") : `<div class="no-match card"><strong>No live compatible route</strong><span>An approved driver must publish a planned route that covers both stops and your time window.</span></div>`;
+    renderLiveExplainer("Server-side planned-route matching", ["Approved stops and forward order checked", "Capacity remains server-enforced", "Select an offer for driver acceptance"]);
+  }
+
+  function renderLiveExplainer(title, reasons) {
+    el("matcher-title").textContent = title;
+    el("scoreValue").textContent = state.liveSelectedOffer ? `${state.liveSelectedOffer.score}%` : "Live";
+    el("scoreBar").style.width = state.liveSelectedOffer ? `${state.liveSelectedOffer.score}%` : "100%";
+    el("validationList").innerHTML = reasons.map((reason) => `<div><i>✓</i><span>${escapeHtml(reason)}</span></div>`).join("");
+  }
+
+  function formatLiveTime(value) {
+    return new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }).format(new Date(value));
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   }
 
   function renderMatchExplainer() {
@@ -638,7 +675,7 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function searchRoutes(event) {
+  async function searchRoutes(event) {
     event.preventDefault();
     if (state.booking) {
       showToast("An active demo ride is in progress", "Use Reset demo to create a different request.", "error");
@@ -653,11 +690,74 @@
     state.declined = false;
     state.offerExpired = false;
     state.offerSeconds = 80;
+    state.liveOffers = null;
+    state.liveSelectedOffer = null;
+    if (live()?.session) {
+      const places = window.LIFT_CONFIG.pilotPlaces;
+      const earliest = new Date(Date.now() + 15 * 60 * 1000);
+      const latest = new Date(earliest.getTime() + 30 * 60 * 1000);
+      try {
+        const request = await live().invoke("create-ride-request", {
+          pickupPlaceId: places[state.request.pickup], dropPlaceId: places[state.request.drop],
+          earliestDepartureAt: earliest.toISOString(), latestDepartureAt: latest.toISOString(), seatQty: state.request.seats
+        });
+        const match = await live().invoke("match-ride-request", { requestId: request.requestId });
+        state.liveRequestId = request.requestId;
+        state.liveOffers = match.offers || [];
+        renderAll();
+        showToast(state.liveOffers.length ? "Live offers found" : "No live route", state.liveOffers.length ? "These results are from the Supabase matching API." : "Ask an approved driver to publish a matching planned route.", state.liveOffers.length ? "success" : "error");
+      } catch (error) {
+        showToast("Live request failed", error.message || "The backend rejected this request.", "error");
+      }
+      return;
+    }
     state.selectedDriverId = eligibleMatches()[0]?.driver.id || null;
     const matchCount = eligibleMatches().length;
     addAudit("MATCHER_EVALUATED", `Request checked; ${matchCount} eligible planned route${matchCount === 1 ? "" : "s"}`, "matcher");
     renderAll();
     showToast(matchCount ? `${matchCount} route match${matchCount === 1 ? "" : "es"} found` : "No compatible route", matchCount ? "Each result passed the forward-order and capacity checks." : "Try a later time or a different stop.", matchCount ? "success" : "error");
+  }
+
+  async function selectLiveOffer(offerId) {
+    const offer = state.liveOffers?.find((item) => item.offerId === offerId);
+    if (!offer) return;
+    try {
+      await live().invoke("select-offer", { offerId });
+      state.liveSelectedOffer = offer;
+      renderAll();
+      showToast("Live offer selected", "The assigned driver can now atomically accept this seat.");
+    } catch (error) {
+      showToast("Could not select offer", error.message || "The offer may have expired.", "error");
+    }
+  }
+
+  async function publishPilotRoute() {
+    try {
+      const route = await live().publishPilotRoute();
+      showToast("Live route published", `Route ${route.routeId || ""} is now matchable.`);
+    } catch (error) {
+      showToast("Route not published", error.message || "Only an approved driver can publish a route.", "error");
+    }
+  }
+
+  async function refreshDriverOffers() {
+    const target = el("liveDriverOffers");
+    try {
+      const offers = await live().invoke("list-driver-offers", {}, false);
+      target.innerHTML = offers.length ? offers.map((offer) => `<div class="safe-stop-note"><span>✓</span><p><strong>${escapeHtml(offer.passengerName)}</strong><br>${escapeHtml(offer.pickupName)} → ${escapeHtml(offer.dropName)} · ${offer.seatQty} seat<button class="secondary-button" data-accept-live-offer="${offer.offerId}">Accept live offer</button></p></div>`).join("") : "No selected live offers.";
+    } catch (error) {
+      target.textContent = error.message || "Only approved drivers can view selected offers.";
+    }
+  }
+
+  async function acceptLiveOffer(offerId) {
+    try {
+      const result = await live().invoke("accept-offer", { offerId });
+      showToast("Live seat reserved", `Booking ${result.bookingId} was created server-side.`);
+      refreshDriverOffers();
+    } catch (error) {
+      showToast("Acceptance conflict", error.message || "The offer could not be accepted.", "error");
+    }
   }
 
   function replayRoute() {
@@ -682,6 +782,10 @@
     el("rideSearchForm").addEventListener("submit", searchRoutes);
     document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => switchWorkspace(button.dataset.workspace)));
     document.addEventListener("click", (event) => {
+      const liveSelection = event.target.closest("[data-select-live-offer]");
+      if (liveSelection) { selectLiveOffer(liveSelection.dataset.selectLiveOffer); return; }
+      const liveAcceptance = event.target.closest("[data-accept-live-offer]");
+      if (liveAcceptance) { acceptLiveOffer(liveAcceptance.dataset.acceptLiveOffer); return; }
       const selected = event.target.closest("[data-select-driver]");
       if (selected) { state.selectedDriverId = selected.dataset.selectDriver; renderAll(); return; }
       const reserve = event.target.closest("[data-reserve-driver]");
@@ -698,6 +802,8 @@
       if (event.target.closest("#resetDemo")) { resetDemo(); }
     });
     el("replayRoute").addEventListener("click", replayRoute);
+    el("publishPilotRoute").addEventListener("click", publishPilotRoute);
+    el("refreshDriverOffers").addEventListener("click", refreshDriverOffers);
     el("helpButton").addEventListener("click", () => el("helpDialog").showModal());
     el("dialogClose").addEventListener("click", () => el("helpDialog").close());
     el("dialogDone").addEventListener("click", () => el("helpDialog").close());
