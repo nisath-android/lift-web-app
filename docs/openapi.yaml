@@ -1,10 +1,12 @@
 openapi: 3.1.0
 info:
-  title: Lift planned-route POC API
+  title: Lift planned-route POC API (historical draft)
   version: 0.1.0
   description: >-
-    Contract for the production-shaped backend behind the static planned-route
-    matching POC. Mutations require authentication, idempotency, and a version guard.
+    Historical domain draft for the browser POC, not the live MVP endpoint
+    contract. The implemented backend uses one authenticated Supabase Edge
+    Function with an action envelope; see BACKEND_MVP.md. Mutations require
+    authentication, idempotency, and a server-side version/capacity guard.
 servers:
   - url: https://api.example.invalid/v1
 paths:

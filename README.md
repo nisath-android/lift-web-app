@@ -1,6 +1,6 @@
-# Lift — planned-route matching POC
+# Lift — planned-route matching POC + backend MVP scaffold
 
-An interactive, browser-only proof of concept for the core Lift product idea: match a passenger to a driver only when the pickup and drop are forward along the driver’s already-planned route, an approved stop exists, and seat capacity remains.
+An interactive proof of concept for the core Lift product idea: match a passenger to a driver only when the pickup and drop are forward along the driver’s already-planned route, an approved stop exists, and seat capacity remains.
 
 ## Run locally
 
@@ -21,11 +21,23 @@ Open `http://127.0.0.1:4173`.
 - Operations screen with a browser-local decision trace and server-side feature-flag concepts.
 - Accessible responsive UI with a map-independent explanation of every route decision.
 
+## Backend MVP scaffold
+
+The real backend foundation is now in the repository but is **not remotely deployed or wired into the static UI yet**. It includes:
+
+- Supabase Auth-backed profiles, passenger/driver/ops roles, and driver approval.
+- PostgreSQL tables, RLS, immutable audit events, approved stops, matching history, offers, incidents, and pilot metrics.
+- Security-definer RPCs for route publication, server-side matching, atomic seat reservation, lifecycle changes, and one-time pickup OTP verification.
+- A protected `lift-api` Edge Function that passes the caller JWT into the API schema; it does not use a browser-held service-role key.
+- pgTAP schema/security checks.
+
+Start with [docs/BACKEND_MVP.md](docs/BACKEND_MVP.md). The implementation source of truth is [supabase/migrations/20261020211524_lift_backend_mvp.sql](supabase/migrations/20261020211524_lift_backend_mvp.sql) and [supabase/functions/lift-api/index.ts](supabase/functions/lift-api/index.ts).
+
 ## Intentional boundaries
 
-This is a visual and interaction POC; it has no backend, persistent storage, live GPS, payment processing, identity verification, routing-provider calls, or real-world dispatch. The seat simulation is not concurrency-safe, and the two-minute/three-attempt OTP is a UI behavior—not production authentication. `PAID_RIDES_ENABLED` and `ROAMING_ENABLED` are deliberately displayed as disabled.
+The current browser UI is still a visual and interaction POC: it has no live backend connection, GPS, payments, routing-provider calls, or real-world dispatch. Its current seat and OTP screens are browser-local demos; the new backend is the source of truth once the client is connected. `PAID_RIDES_ENABLED` and `ROAMING_ENABLED` remain deliberately disabled.
 
-The production-shaped contract and schema that should back this UI are included in [docs/openapi.yaml](docs/openapi.yaml), [docs/POC_DOMAIN.md](docs/POC_DOMAIN.md), and [database/001_poc_schema.sql](database/001_poc_schema.sql).
+The historical POC contract and domain sketch remain in [docs/openapi.yaml](docs/openapi.yaml), [docs/POC_DOMAIN.md](docs/POC_DOMAIN.md), and [database/001_poc_schema.sql](database/001_poc_schema.sql). They are not the deployed backend contract; see [docs/BACKEND_MVP.md](docs/BACKEND_MVP.md) instead.
 
 ## Manual acceptance walkthrough
 

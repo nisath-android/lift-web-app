@@ -16,15 +16,16 @@ A route is eligible only when all of these rules are true:
 6. The pickup and drop have a positive approved-roadside safety status.
 7. The pickup ETA fits the request time window.
 
-The browser demo implements these rules with seeded data, derives an ETA for the selected stop, and freezes the accepted route snapshot. It is intentionally browser-local. Production must calculate and enforce the rules server-side inside a database transaction for every reservation.
+The browser demo implements these rules with seeded data, derives an ETA for the selected stop, and freezes the accepted route snapshot. It is intentionally browser-local. The Supabase MVP migration now calculates and enforces these rules server-side inside a database transaction for every reservation; the UI remains to be connected to it.
 
 ## Lifecycle separation
 
 | Aggregate | State path | Important rule |
 | --- | --- | --- |
-| Ride request | `OPEN → MATCHED → BOOKED` | `CANCELLED` and `EXPIRED` are terminal. |
+| Ride request | `OPEN → MATCHED → BOOKED → COMPLETED` | `CANCELLED` and `EXPIRED` are terminal. |
 | Driver route | `DRAFT → PUBLISHED → DEPARTED → COMPLETED` | Route edits after a booking require compatibility revalidation. |
-| Booking/trip | `OFFERED → DRIVER_EN_ROUTE → DRIVER_ARRIVED → OTP_VERIFIED → DROP_PROPOSED → COMPLETED` | Only a valid, single-use pickup OTP can start a trip. The POC UI caps attempts at three and expires it after two minutes; production needs a server-side challenge. |
+| Offer | `PENDING → SELECTED → ACCEPTED` | An offer is separate from a booking and captures the route version and expiry. |
+| Booking/trip | `DRIVER_EN_ROUTE → DRIVER_ARRIVED → OTP_VERIFIED → DROP_PROPOSED → COMPLETED` | Only a valid, single-use pickup OTP can start a trip. The backend caps attempts at three, expires it after two minutes, stores only a hash, and never writes the plaintext to audit data. |
 | Payment | `NOT_CREATED` in this POC | Trip completion is never proof of payment. |
 
 ## Capacity transaction

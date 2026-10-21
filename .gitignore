@@ -1,0 +1,9 @@
+# Supabase local runtime state and local-only secrets
+.supabase/
+supabase/.temp/
+supabase/.env
+supabase/.env.*
+!supabase/.env.example
+
+# Generated distribution / handoff artifacts
+lift-route-match-poc.tar.gz

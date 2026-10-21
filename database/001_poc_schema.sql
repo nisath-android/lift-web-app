@@ -1,6 +1,9 @@
--- PostgreSQL schema for the planned-route POC. Add PostGIS geometry and real
--- routing provider snapshots in the next phase; never use a Redis GEO result
--- as the source of truth for booking capacity.
+-- HISTORICAL POC DOMAIN SKETCH ONLY — not the backend implementation source.
+-- It intentionally lacks Supabase Auth FKs, RLS, driver approval, immutable
+-- audit events, idempotency, and atomic reservation enforcement. Use
+-- supabase/migrations/20261020211524_lift_backend_mvp.sql for the MVP schema.
+-- Add PostGIS geometry and real routing provider snapshots in a later phase;
+-- never use a Redis GEO result as the source of truth for booking capacity.
 
 create extension if not exists pgcrypto;
 
