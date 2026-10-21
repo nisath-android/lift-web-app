@@ -2,15 +2,15 @@
 
 **Document version:** 1.0.0  
 **Prepared:** 2026-10-21  
-**Database query / migration version:** `20261020211524_lift_backend_mvp`  
+**Database query / migration version:** `20261021144940_optimize_lift_rls_and_foreign_keys`
 **Edge API contract version:** 1.0.0  
 **Implementation commit:** `513c108` — `Build Supabase backend MVP skeleton`
 
 ## Executive status
 
-The browser proof of concept is still running as a local simulation. The backend MVP foundation is now present in this repository: a Supabase schema, Row Level Security (RLS), server-side route matching, transactional seat booking, OTP trip hand-off, audit history, and pilot-operations commands.
+The browser proof of concept is still running as a local simulation. The backend MVP is deployed to a dedicated Lift Supabase project: a schema, Row Level Security (RLS), server-side route matching, transactional seat booking, OTP trip hand-off, audit history, and pilot-operations commands.
 
-It has **not** been connected to a remote Lift Supabase project or to the static UI yet. No unrelated Supabase project was changed.
+The remote project is **Lift** (`hsysghnukzqfvsmpfldr`) in `ap-south-1`; its endpoint is `https://hsysghnukzqfvsmpfldr.supabase.co`. No unrelated Supabase project was changed. The static UI is not connected to it yet.
 
 ## Completed work
 
@@ -27,7 +27,9 @@ It has **not** been connected to a remote Lift Supabase project or to the static
 
 ## Versioned query contract
 
-`20261020211524_lift_backend_mvp` is the current single source of truth for database queries and rules. It must be deployed as one Supabase migration, in order, and must not be edited after it has been pushed to a shared environment. Future database changes must use a new timestamped migration, for example `YYYYMMDDHHMMSS_lift_backend_v1_1.sql`.
+`20261020211524_lift_backend_mvp` and `20261021144940_optimize_lift_rls_and_foreign_keys` are the current ordered source of truth for database queries and rules. The v1.1 migration caches RLS identity checks and adds foreign-key indexes without changing the access model. Each migration must be deployed in order and must not be edited after it has been pushed to a shared environment. Future database changes must use a new timestamped migration, for example `YYYYMMDDHHMMSS_lift_backend_v1_2.sql`.
+
+The remote management connector records its own deployment timestamp. The active Lift registry is `20261021144822_lift_backend_mvp` followed by `20261021145017_optimize_lift_rls_and_foreign_keys`; these names map directly to the two repository migration files above. Keep both the repository filename and the deployed registry entry in release notes.
 
 | Query group | Version | RPC queries |
 | --- | --- | --- |
@@ -35,6 +37,7 @@ It has **not** been connected to a remote Lift Supabase project or to the static
 | Passenger request and matching | `20261020211524` | `create_ride_request`, `match_ride_request`, `select_offer` |
 | Reservation and lifecycle | `20261020211524` | `accept_offer`, `mark_driver_arrived`, `reveal_pickup_otp_once`, `verify_pickup_otp`, `propose_drop`, `confirm_drop` |
 | Operations | `20261020211524` | `set_driver_approval`, `report_incident`, `resolve_incident`, `pilot_metrics` |
+| RLS and foreign-key optimization | `20261021144940` | Policy-plan caching and 26 foreign-key indexes; no API contract change. |
 
 All domain commands are called through one authenticated Edge Function endpoint with this envelope:
 
@@ -53,6 +56,7 @@ Every state-changing command needs an idempotency key except the OTP reveal/veri
 | Source | Purpose |
 | --- | --- |
 | `supabase/migrations/20261020211524_lift_backend_mvp.sql` | Versioned schema, policies, triggers, indexes, and all RPC query implementations. |
+| `supabase/migrations/20261021144940_optimize_lift_rls_and_foreign_keys.sql` | Versioned RLS-plan and foreign-key-index optimization. |
 | `supabase/functions/lift-api/index.ts` | JWT-protected HTTP action router, validation, CORS policy, and API error mapping. |
 | `supabase/tests/lift_backend_test.sql` | pgTAP structural and security regression checks. |
 | `supabase/.env.example` | Safe local environment-variable template. |
@@ -65,6 +69,9 @@ Every state-changing command needs an idempotency key except the OTP reveal/veri
 - API documentation YAML parsed successfully.
 - Git whitespace validation passed.
 - Review fixes included the correct E.164 phone expression and safe OTP rotation after expiry or attempt exhaustion.
+- Remote migration deployment succeeded, all 17 public MVP tables report RLS enabled, and `lift-api` is active with JWT verification enabled.
+- A request without a bearer token receives `401 UNAUTHORIZED_NO_AUTH_HEADER` from the live Function gateway, confirming the public endpoint is not anonymously callable.
+- Supabase security/performance advisors are clear of actionable RLS and foreign-key findings. The only security informational item is intentional: `pickup_challenges` has RLS and no client policy because no client receives any table privilege; the guarded OTP RPCs are its only access path. The remaining unused-index information is expected on an empty, newly created pilot database.
 
 ## Verification still required
 
@@ -80,15 +87,12 @@ Before a live pilot, also test two simultaneous accepts for the final seat and c
 
 ## Deployment and integration remaining
 
-1. Choose or create a dedicated **Lift** Supabase project.
-2. Link it with `npx supabase link --project-ref <lift-project-ref>`.
-3. Configure Supabase Auth redirect URLs for the deployed site and local development.
-4. Expose only the `api` schema in Supabase API settings; do not expose `private`.
-5. Deploy the query version: `npx supabase db push`.
-6. Set `LIFT_ALLOWED_ORIGINS` as an Edge Function secret and deploy `lift-api` with JWT verification enabled.
-7. Give the first pilot Ops/Driver roles through the controlled SQL bootstrap in `docs/BACKEND_MVP.md`.
-8. Replace browser-local state in `dist/app.js` with Auth plus `supabase.functions.invoke('lift-api', ...)` calls.
-9. Add Google Maps only as display/search UI after a browser-restricted Maps key is supplied; matching and seat capacity must remain server-side.
+1. Configure Supabase Auth redirect URLs for the deployed site and local development.
+2. Expose only the `api` schema in Supabase API settings; do not expose `private`.
+3. Set `LIFT_ALLOWED_ORIGINS` as an Edge Function secret if origins beyond the current local and private-POC URLs are needed.
+4. Give the first pilot Ops/Driver roles through the controlled SQL bootstrap in `docs/BACKEND_MVP.md`.
+5. Replace browser-local state in `dist/app.js` with Auth plus `supabase.functions.invoke('lift-api', ...)` calls.
+6. Add Google Maps only as display/search UI after a browser-restricted Maps key is supplied; matching and seat capacity must remain server-side.
 
 ## Explicitly out of scope today
 

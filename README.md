@@ -23,7 +23,7 @@ Open `http://127.0.0.1:4173`.
 
 ## Backend MVP scaffold
 
-The real backend foundation is now in the repository but is **not remotely deployed or wired into the static UI yet**. It includes:
+The real backend foundation is now deployed to the dedicated **Lift** Supabase project in `ap-south-1`, but is **not wired into the static UI yet**. It includes:
 
 - Supabase Auth-backed profiles, passenger/driver/ops roles, and driver approval.
 - PostgreSQL tables, RLS, immutable audit events, approved stops, matching history, offers, incidents, and pilot metrics.
