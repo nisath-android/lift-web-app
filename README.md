@@ -31,7 +31,7 @@ The real backend foundation is now in the repository but is **not remotely deplo
 - A protected `lift-api` Edge Function that passes the caller JWT into the API schema; it does not use a browser-held service-role key.
 - pgTAP schema/security checks.
 
-Start with [docs/BACKEND_MVP.md](docs/BACKEND_MVP.md). The implementation source of truth is [supabase/migrations/20261020211524_lift_backend_mvp.sql](supabase/migrations/20261020211524_lift_backend_mvp.sql) and [supabase/functions/lift-api/index.ts](supabase/functions/lift-api/index.ts).
+Start with [docs/IMPLEMENTATION_HANDOVER_v1.0.md](docs/IMPLEMENTATION_HANDOVER_v1.0.md) for the completed-work status and versioned query contract, then use [docs/BACKEND_MVP.md](docs/BACKEND_MVP.md) for the operational guide. The implementation source of truth is [supabase/migrations/20261020211524_lift_backend_mvp.sql](supabase/migrations/20261020211524_lift_backend_mvp.sql) and [supabase/functions/lift-api/index.ts](supabase/functions/lift-api/index.ts).
 
 ## Intentional boundaries
 
