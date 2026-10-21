@@ -2,8 +2,9 @@
 window.LIFT_CONFIG = Object.freeze({
   supabaseUrl: "https://hsysghnukzqfvsmpfldr.supabase.co",
   supabasePublishableKey: "sb_publishable_Vgc3ScXFB7FpDD2wWgOjVA_p7dgsdKd",
-  // Add only a browser-restricted Maps JavaScript API key. Android keys do not work in this web POC.
-  mapsApiKey: "",
+  // Browser-restricted Maps JavaScript API key; this key must remain limited
+  // to the configured local and private Lift Site HTTP referrers in Google Cloud.
+  mapsApiKey: "AIzaSyDqlGPBep636qnHP7W9fhXZZApqeMCvfvg",
   pilotPlaces: Object.freeze({
     gandhipuram: "10000000-0000-4000-8000-000000000001",
     "nava-india": "10000000-0000-4000-8000-000000000002",
