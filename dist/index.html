@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Lift planned-route matching POC" />
-    <title>Lift — Route Match POC</title>
+    <meta name="description" content="Lift Passenger — planned-route ride matching" />
+    <meta name="theme-color" content="#102923" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lift Passenger" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/lift-passenger.svg" />
+    <title>Lift Passenger — Route Match</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -18,12 +25,10 @@
           <span>lift<span class="brand-dot">.</span></span>
         </a>
 
-        <div class="pilot-pill"><span class="pulse-dot"></span><span>Planned-route POC</span></div>
+        <div class="pilot-pill"><span class="pulse-dot"></span><span>Passenger pilot</span></div>
 
         <nav class="workspace-nav" aria-label="Workspaces">
-          <button class="nav-item active" data-workspace="passenger"><span class="nav-icon">⌖</span><span>Passenger</span></button>
-          <button class="nav-item" data-workspace="driver"><span class="nav-icon">◉</span><span>Driver console</span></button>
-          <button class="nav-item" data-workspace="ops"><span class="nav-icon">▦</span><span>Operations</span></button>
+          <button class="nav-item active" data-workspace="passenger"><span class="nav-icon">⌖</span><span>Find a ride</span></button>
         </nav>
 
         <div class="sidebar-spacer"></div>
@@ -40,7 +45,7 @@
       <main id="top">
         <header class="topbar">
           <div class="breadcrumb"><span>Coimbatore pilot</span><span class="slash">/</span><strong id="workspaceLabel">Passenger booking</strong></div>
-          <div class="topbar-actions"><span class="live-status" id="backendStatus"><span class="pulse-dot"></span> Connecting secure backend…</span><button class="secondary-button auth-button" id="authButton" type="button">Sign in</button><button class="icon-button" id="themeToggle" aria-label="Toggle contrast">◐</button><button class="avatar" aria-label="Current user">A</button></div>
+          <div class="topbar-actions"><span class="live-status" id="backendStatus"><span class="pulse-dot"></span> Connecting secure backend…</span><button class="secondary-button install-button" id="installApp" type="button" hidden>Install app</button><button class="secondary-button auth-button" id="authButton" type="button">Sign in</button><button class="icon-button" id="themeToggle" aria-label="Toggle contrast">◐</button><button class="avatar" aria-label="Current user">A</button></div>
         </header>
 
         <section class="safety-banner" role="note" id="safetyBanner"><span class="banner-icon">✦</span><p><strong>Controlled technical pilot.</strong> No payment, roaming, real KYC, or real-world ride dispatch is enabled.</p><button id="bannerClose" aria-label="Dismiss notice">×</button></section>
@@ -121,5 +126,6 @@
     <script src="live-client.js" defer></script>
     <script src="map-loader.js" defer></script>
     <script src="app.js" defer></script>
+    <script src="pwa.js" defer></script>
   </body>
 </html>

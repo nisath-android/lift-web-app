@@ -47,3 +47,11 @@ The historical POC contract and domain sketch remain in [docs/openapi.yaml](docs
 4. Finish at the drop-off, return to **Passenger**, and confirm the demo drop.
 5. Open **Operations** to inspect the audit events and rejected candidates.
 6. Search at `9:00 AM` to observe time-window rejection, choose two seats to observe capacity rejection, or try `Hope College → Gandhipuram` to see the reverse-planned Kiran route render in its own direction.
+# Lift Route Match POC
+
+## Client split
+
+- **Passenger:** `dist/` is an installable Progressive Web App (PWA). It is the public pilot experience for sign-in and planned-route ride requests.
+- **Driver:** `driver-android/` is the native Kotlin + Jetpack Compose Android companion. Only Operations-approved driver accounts can perform driver actions.
+
+See [the Android setup guide](driver-android/README.md) for the driver package name, Maps key restrictions, and onboarding flow.

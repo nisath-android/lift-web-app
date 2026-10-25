@@ -7,3 +7,9 @@ supabase/.env.*
 
 # Generated distribution / handoff artifacts
 lift-route-match-poc.tar.gz
+
+# Android developer-machine configuration and build output
+driver-android/local.properties
+driver-android/.gradle/
+driver-android/app/build/
+driver-android/build/

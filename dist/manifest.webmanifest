@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Lift Passenger",
+  "short_name": "Lift",
+  "description": "Find a compatible ride on an approved planned route.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f5",
+  "theme_color": "#102923",
+  "icons": [
+    {
+      "src": "icons/lift-passenger.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

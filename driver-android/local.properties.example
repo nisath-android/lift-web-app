@@ -1,0 +1,7 @@
+# Copy this file to local.properties. Do not commit local.properties.
+# These are client-safe publishable credentials, never use a Supabase service-role key here.
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
+
+# Create an Android-restricted Google Maps key for this applicationId and your signing SHA-1.
+MAPS_API_KEY=AIza_replace_me
