@@ -6,6 +6,7 @@ Native Android companion for **approved drivers only**. Passenger booking remain
 
 - Application ID / Android package: `com.lift.route.driver`
 - Stack: Kotlin, Jetpack Compose, Google Maps Compose, Supabase Auth and Edge Functions.
+- Verified build toolchain: Android Gradle Plugin 9.4, Gradle 9.6, JDK 17, compile SDK 37.
 - Backend boundary: the app calls only the JWT-protected `lift-api` Edge Function. Capacity, route-order validation, approval, and booking creation stay enforced in Supabase.
 
 ## Local setup

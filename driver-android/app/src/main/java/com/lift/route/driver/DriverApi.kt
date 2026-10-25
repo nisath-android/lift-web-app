@@ -1,8 +1,8 @@
 package com.lift.route.driver
 
 import io.github.jan.supabase.functions.functions
-import io.github.jan.supabase.gotrue.gotrue
-import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.builtin.Email
 import io.ktor.client.statement.bodyAsText
 import java.time.Instant
 import java.util.UUID
@@ -32,15 +32,15 @@ class DriverApi {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun signIn(email: String, password: String) {
-        client.gotrue.loginWith(Email) {
+        client.auth.signInWith(Email) {
             this.email = email.trim()
             this.password = password
         }
     }
 
-    suspend fun signOut() = client.gotrue.logout()
+    suspend fun signOut() = client.auth.signOut()
 
-    fun hasSession(): Boolean = client.gotrue.currentSessionOrNull() != null
+    fun hasSession(): Boolean = client.auth.currentSessionOrNull() != null
 
     suspend fun publishPilotRoute(): String {
         val departure = Instant.now().plusSeconds(20 * 60)
