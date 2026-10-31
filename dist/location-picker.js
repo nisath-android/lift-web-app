@@ -14,7 +14,10 @@
   let map;
   let marker;
   let geocoder;
-  let autocomplete;
+  let autocompleteService;
+  let placesService;
+  let predictionIndex = new Map();
+  let suggestionTimer;
   let selected;
 
   const el = (id) => document.getElementById(id);
@@ -27,6 +30,56 @@
   };
   const nearestStop = (point) => approvedStops.reduce((nearest, stop) => distanceKm(point, stop) < distanceKm(point, nearest) ? stop : nearest, approvedStops[0]);
   const setStatus = (message) => { el("locationStatus").textContent = message; };
+  const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+
+  function clearSuggestions() {
+    el("locationSuggestions").hidden = true;
+    el("locationSuggestions").innerHTML = "";
+    predictionIndex = new Map();
+  }
+
+  function showSuggestions(items, source = "google") {
+    const node = el("locationSuggestions");
+    predictionIndex = new Map(items.map((item) => [item.id, item]));
+    node.innerHTML = items.length ? items.map((item) => `<button type="button" class="location-suggestion" data-location-suggestion="${escapeHtml(item.id)}" role="option"><span>${escapeHtml(item.primary)}</span><small>${escapeHtml(item.secondary || (source === "google" ? "Google address" : "Approved pilot stop"))}</small></button>`).join("") : "";
+    node.hidden = !items.length;
+  }
+
+  function showPilotStopSuggestions(query) {
+    const term = query.toLowerCase();
+    const matches = approvedStops.filter((stop) => stop.name.toLowerCase().includes(term)).slice(0, 5)
+      .map((stop) => ({ id: `pilot:${stop.id}`, primary: stop.name, secondary: "Approved pilot stop", stop }));
+    showSuggestions(matches, "pilot");
+  }
+
+  function selectSuggestion(id) {
+    const item = predictionIndex.get(id);
+    if (!item) return;
+    clearSuggestions();
+    if (item.stop) {
+      const point = { lat: item.stop.lat, lng: item.stop.lng };
+      map?.panTo(point); map?.setZoom(16); updateSelection(point, item.stop.name); setStatus("Approved pilot stop selected.");
+      return;
+    }
+    if (!placesService) { setStatus("Google address details are unavailable. Select an approved pilot stop or pin the map."); return; }
+    setStatus("Loading address…");
+    placesService.getDetails({ placeId: item.placeId, fields: ["formatted_address", "geometry", "name"] }, (place, status) => {
+      if (status !== "OK" || !place?.geometry?.location) { setStatus("Address details could not be loaded. Try another suggestion."); return; }
+      const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
+      map.panTo(point); map.setZoom(16); updateSelection(point, place.formatted_address || place.name || item.primary); setStatus("Address selected. Confirm to continue.");
+    });
+  }
+
+  function fetchSuggestions() {
+    const query = el("locationSearchInput").value.trim();
+    clearSuggestions();
+    if (query.length < 2) return;
+    if (!autocompleteService) { showPilotStopSuggestions(query); return; }
+    autocompleteService.getPlacePredictions({ input: query, componentRestrictions: { country: "in" } }, (predictions, status) => {
+      if (status !== "OK" || !predictions?.length) { showPilotStopSuggestions(query); return; }
+      showSuggestions(predictions.slice(0, 5).map((prediction) => ({ id: `google:${prediction.place_id}`, placeId: prediction.place_id, primary: prediction.structured_formatting?.main_text || prediction.description, secondary: prediction.structured_formatting?.secondary_text || "Google address" })));
+    });
+  }
 
   function updateSelection(point, address) {
     const stop = nearestStop(point);
@@ -54,21 +107,13 @@
     map = new google.maps.Map(el("locationPickerMap"), { center: coimbatore, zoom: 12, disableDefaultUI: true, zoomControl: true, clickableIcons: false });
     marker = new google.maps.Marker({ map, visible: false, draggable: true, title: "Selected location" });
     geocoder = new google.maps.Geocoder();
+    if (google.maps.places?.AutocompleteService && google.maps.places?.PlacesService) {
+      autocompleteService = new google.maps.places.AutocompleteService();
+      placesService = new google.maps.places.PlacesService(map);
+    }
     map.addListener("click", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
     marker.addListener("dragend", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
 
-    if (google.maps.places?.Autocomplete) {
-      autocomplete = new google.maps.places.Autocomplete(el("locationSearchInput"), {
-        componentRestrictions: { country: "in" }, fields: ["formatted_address", "geometry", "name"]
-      });
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (!place.geometry?.location) { setStatus("Choose an address from the suggestions."); return; }
-        const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-        map.panTo(point); map.setZoom(16); updateSelection(point, place.formatted_address || place.name || "Selected address");
-        setStatus("Address selected. Confirm to keep the nearest approved pilot stop.");
-      });
-    }
     return true;
   }
 
@@ -104,8 +149,9 @@
     el("locationConfirmButton").disabled = true;
     setStatus("Type an address, use current location, or tap the map.");
     dialog().showModal();
-    if (!ensureGooglePicker()) { setStatus("Google Maps is unavailable. You can still choose an approved pilot stop from the request form."); return; }
+    if (!ensureGooglePicker()) { setStatus("Google Maps is unavailable. Matching pilot-stop suggestions are still available."); setTimeout(() => el("locationSearchInput").focus(), 0); return; }
     setTimeout(() => google.maps.event.trigger(map, "resize"), 0);
+    setTimeout(() => el("locationSearchInput").focus(), 0);
   }
 
   function confirm() {
@@ -120,6 +166,8 @@
     el("locationConfirmButton").addEventListener("click", confirm);
     el("locationCurrentButton").addEventListener("click", useCurrentLocation);
     el("locationSearchInput").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); runTextSearch(); } });
+    el("locationSearchInput").addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(fetchSuggestions, 180); });
+    el("locationSuggestions").addEventListener("click", (event) => { const button = event.target.closest("[data-location-suggestion]"); if (button) selectSuggestion(button.dataset.locationSuggestion); });
     window.addEventListener("lift:maps-ready", ensureGooglePicker);
   });
 
