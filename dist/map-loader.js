@@ -7,6 +7,7 @@
     const map = new google.maps.Map(canvas, { center: route[2], zoom: 13, disableDefaultUI: true, gestureHandling: "cooperative" });
     new google.maps.Polyline({ map, path: route, strokeColor: "#5fe2bb", strokeOpacity: 0.9, strokeWeight: 6 });
     new google.maps.Marker({ map, position: route[1], title: "Approved pickup corridor" }); canvas.parentElement.classList.add("maps-loaded");
+    window.dispatchEvent(new Event("lift:maps-ready"));
   };
-  const script = document.createElement("script"); script.async = true; script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initLiftGoogleMap`; document.head.append(script);
+  const script = document.createElement("script"); script.async = true; script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=initLiftGoogleMap`; document.head.append(script);
 })();

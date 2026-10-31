@@ -73,7 +73,11 @@
       declined: false,
       liveRequestId: null,
       liveOffers: null,
-      liveSelectedOffer: null
+      liveSelectedOffer: null,
+      locationLabels: {
+        pickup: { address: "Nava India", stopName: "Nava India" },
+        drop: { address: "Peelamedu", stopName: "Peelamedu" }
+      }
     };
   }
 
@@ -191,6 +195,15 @@
     drop.value = state.request.drop;
     el("seatSelect").value = String(state.request.seats);
     el("departureSelect").value = state.request.departure;
+    renderLocationSummary("pickup");
+    renderLocationSummary("drop");
+  }
+
+  function renderLocationSummary(mode) {
+    const selectedStop = stopById(state.request[mode]);
+    const label = state.locationLabels?.[mode] || { address: selectedStop.name, stopName: selectedStop.name };
+    el(`${mode}LocationText`).textContent = label.address || selectedStop.name;
+    el(`${mode}LocationHint`).textContent = label.address === selectedStop.name ? "Approved pilot stop" : `Approved stop · ${selectedStop.short}`;
   }
 
   function renderMatches() {
@@ -809,6 +822,18 @@
     el("dialogDone").addEventListener("click", () => el("helpDialog").close());
     el("themeToggle").addEventListener("click", () => document.body.classList.toggle("high-contrast"));
     el("bannerClose").addEventListener("click", () => el("safetyBanner").remove());
+    el("pickupLocationButton").addEventListener("click", () => window.LiftLocationPicker?.open("pickup"));
+    el("dropLocationButton").addEventListener("click", () => window.LiftLocationPicker?.open("drop"));
+    window.addEventListener("lift:location-selected", (event) => {
+      const { mode, stopId, address, stopName } = event.detail || {};
+      if (!mode || !stopById(stopId)) return;
+      state.request[mode] = stopId;
+      state.locationLabels[mode] = { address, stopName };
+      setOptions();
+      renderSafeStopNote();
+      syncMap();
+      showToast(`${mode === "pickup" ? "Pickup" : "Drop"} updated`, `Nearest approved pilot stop: ${stopName}.`);
+    });
     const previewSafeStop = () => renderSafeStopNote(el("pickupSelect").value, el("dropSelect").value);
     el("pickupSelect").addEventListener("change", previewSafeStop);
     el("dropSelect").addEventListener("change", previewSafeStop);

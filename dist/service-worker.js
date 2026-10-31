@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lift-passenger-v1';
+const CACHE_NAME = 'lift-passenger-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const APP_SHELL = [
   './lift-config.js',
   './live-client.js',
   './map-loader.js',
+  './location-picker.js',
   './app.js',
   './pwa.js',
   './manifest.webmanifest',
