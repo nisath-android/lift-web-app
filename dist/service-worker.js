@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lift-passenger-v3';
+const CACHE_NAME = 'lift-passenger-v4';
 const APP_SHELL = [
   './',
   './index.html',

@@ -6,12 +6,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+enum class DriverAuthStep { SIGN_IN, EMAIL, EMAIL_CODE, ACCOUNT_DETAILS, RESET_PASSWORD }
+
 data class DriverUiState(
     val configured: Boolean = LiftSupabase.isConfigured,
     val signedIn: Boolean = false,
     val busy: Boolean = false,
     val status: String = "Sign in with an approved driver account.",
     val offers: List<DriverOffer> = emptyList(),
+    val authStep: DriverAuthStep = DriverAuthStep.SIGN_IN,
+    val authFlow: String = "sign-in",
+    val pendingEmail: String = "",
 )
 
 class DriverViewModel : ViewModel() {
@@ -25,10 +30,47 @@ class DriverViewModel : ViewModel() {
         }
     }
 
-    fun signIn(email: String, password: String) = runAction {
-        api.signIn(email, password)
+    fun signIn(phone: String, password: String) = runAction {
+        api.signIn(phone, password)
         _state.value = _state.value.copy(signedIn = true, status = "Signed in. Checking approved driver offers…")
         refreshOffers()
+    }
+
+    fun startSignUp() {
+        _state.value = _state.value.copy(authStep = DriverAuthStep.EMAIL, authFlow = "sign-up", status = "Enter your verified email to receive a code.")
+    }
+
+    fun startPasswordReset() {
+        _state.value = _state.value.copy(authStep = DriverAuthStep.EMAIL, authFlow = "reset", status = "Enter your verified recovery email.")
+    }
+
+    fun returnToSignIn() {
+        _state.value = _state.value.copy(authStep = DriverAuthStep.SIGN_IN, authFlow = "sign-in", pendingEmail = "", status = "Sign in with an approved driver account.")
+    }
+
+    fun sendEmailCode(email: String) = runAction {
+        api.sendEmailCode(email, createUser = _state.value.authFlow == "sign-up")
+        _state.value = _state.value.copy(authStep = DriverAuthStep.EMAIL_CODE, pendingEmail = email.trim(), status = "Email code sent. Check inbox and spam folder.")
+    }
+
+    fun verifyEmailCode(code: String) = runAction {
+        api.verifyEmailCode(_state.value.pendingEmail, code)
+        val reset = _state.value.authFlow == "reset"
+        _state.value = _state.value.copy(
+            authStep = if (reset) DriverAuthStep.RESET_PASSWORD else DriverAuthStep.ACCOUNT_DETAILS,
+            status = if (reset) "Email verified. Choose a new password." else "Email verified. Add your phone login ID and password.",
+        )
+    }
+
+    fun finishRegistration(name: String, phone: String, password: String) = runAction {
+        api.finishRegistration(name, phone, password)
+        _state.value = _state.value.copy(signedIn = true, status = "Account ready. Operations must approve this driver before route publishing is available.")
+        refreshOffers()
+    }
+
+    fun finishPasswordReset(password: String) = runAction {
+        api.resetPassword(password)
+        _state.value = _state.value.copy(authStep = DriverAuthStep.SIGN_IN, authFlow = "sign-in", pendingEmail = "", status = "Password updated. Sign in with phone and password.")
     }
 
     fun signOut() = runAction {

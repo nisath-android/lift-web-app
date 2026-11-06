@@ -3,6 +3,9 @@ package com.lift.route.driver
 import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.OTP
+import io.github.jan.supabase.auth.OtpType
+import io.github.jan.supabase.auth.user.UserSession
 import io.ktor.client.statement.bodyAsText
 import java.time.Instant
 import java.util.UUID
@@ -16,6 +19,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
 data class DriverOffer(
@@ -31,11 +35,51 @@ class DriverApi {
     private val client get() = LiftSupabase.client
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun signIn(email: String, password: String) {
-        client.auth.signInWith(Email) {
+    suspend fun signIn(phone: String, password: String) {
+        val result = invokeAuthGateway(buildJsonObject {
+            put("action", "password-sign-in")
+            put("phone", normalizePhone(phone))
+            put("password", password)
+        })
+        val session = result["session"]?.jsonObject ?: error("INVALID_LOGIN")
+        client.auth.importSession(
+            UserSession(
+                accessToken = session["accessToken"]?.jsonPrimitive?.content ?: error("INVALID_LOGIN"),
+                refreshToken = session["refreshToken"]?.jsonPrimitive?.content ?: error("INVALID_LOGIN"),
+                expiresIn = session["expiresIn"]?.jsonPrimitive?.longOrNull ?: error("INVALID_LOGIN"),
+                tokenType = session["tokenType"]?.jsonPrimitive?.content ?: "bearer",
+                user = null,
+            ),
+        )
+    }
+
+    suspend fun sendEmailCode(email: String, createUser: Boolean) {
+        client.auth.signInWith(OTP) {
             this.email = email.trim()
-            this.password = password
+            this.createUser = createUser
         }
+    }
+
+    suspend fun verifyEmailCode(email: String, code: String) {
+        client.auth.verifyEmailOtp(
+            type = OtpType.Email.EMAIL,
+            email = email.trim(),
+            token = code.trim(),
+        )
+    }
+
+    suspend fun finishRegistration(displayName: String, phone: String, password: String) {
+        invokeAuthGateway(buildJsonObject {
+            put("action", "complete-registration")
+            put("displayName", displayName.trim())
+            put("phone", normalizePhone(phone))
+            put("password", password)
+        })
+    }
+
+    suspend fun resetPassword(password: String) {
+        client.auth.updateUser { this.password = password }
+        client.auth.signOut()
     }
 
     suspend fun signOut() = client.auth.signOut()
@@ -101,6 +145,19 @@ class DriverApi {
         val errorCode = envelope["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content
         if (errorCode != null) error(errorCode)
         return envelope["data"] ?: error("EMPTY_SERVER_RESPONSE")
+    }
+
+    private suspend fun invokeAuthGateway(request: JsonObject): JsonObject {
+        val response = client.functions.invoke(function = "auth-gateway", body = request)
+        val envelope = json.parseToJsonElement(response.bodyAsText()).jsonObject
+        val errorCode = envelope["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content
+        if (errorCode != null) error(errorCode)
+        return envelope["data"]?.jsonObject ?: error("EMPTY_AUTH_RESPONSE")
+    }
+
+    private fun normalizePhone(value: String): String {
+        val compact = value.trim().replace(Regex("[\\s()\\-]"), "")
+        return if (compact.matches(Regex("\\d{10}"))) "+91$compact" else compact
     }
 
     private companion object {

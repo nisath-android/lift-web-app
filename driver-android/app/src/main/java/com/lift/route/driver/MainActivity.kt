@@ -72,7 +72,17 @@ private fun LiftDriverApp(viewModel: DriverViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     when {
         !state.configured -> ConfigurationRequired()
-        !state.signedIn -> SignInScreen(state = state, onSignIn = viewModel::signIn)
+        !state.signedIn -> DriverAuthScreen(
+            state = state,
+            onSignIn = viewModel::signIn,
+            onStartSignUp = viewModel::startSignUp,
+            onStartReset = viewModel::startPasswordReset,
+            onBack = viewModel::returnToSignIn,
+            onSendEmailCode = viewModel::sendEmailCode,
+            onVerifyEmailCode = viewModel::verifyEmailCode,
+            onFinishRegistration = viewModel::finishRegistration,
+            onFinishReset = viewModel::finishPasswordReset,
+        )
         else -> DriverHome(
             state = state,
             onSignOut = viewModel::signOut,
@@ -100,8 +110,21 @@ private fun ConfigurationRequired() {
 }
 
 @Composable
-private fun SignInScreen(state: DriverUiState, onSignIn: (String, String) -> Unit) {
+private fun DriverAuthScreen(
+    state: DriverUiState,
+    onSignIn: (String, String) -> Unit,
+    onStartSignUp: () -> Unit,
+    onStartReset: () -> Unit,
+    onBack: () -> Unit,
+    onSendEmailCode: (String) -> Unit,
+    onVerifyEmailCode: (String) -> Unit,
+    onFinishRegistration: (String, String, String) -> Unit,
+    onFinishReset: (String) -> Unit,
+) {
+    var phone by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -112,19 +135,52 @@ private fun SignInScreen(state: DriverUiState, onSignIn: (String, String) -> Uni
             Spacer(Modifier.height(8.dp))
             Text("Closed pilot driver console", color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(28.dp))
-            OutlinedTextField(email, { email = it }, label = { Text("Driver email") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { onSignIn(email, password) },
-                enabled = !state.busy && email.isNotBlank() && password.length >= 8,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (state.busy) "Signing in…" else "Sign in as driver") }
+            when (state.authStep) {
+                DriverAuthStep.SIGN_IN -> {
+                    OutlinedTextField(phone, { phone = it }, label = { Text("Phone number") }, placeholder = { Text("+91 98765 43210") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { onSignIn(phone, password) }, enabled = !state.busy && phone.isNotBlank() && password.length >= 10, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Signing in…" else "Sign in as driver") }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = onStartSignUp, enabled = !state.busy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) { Text("Create account") }
+                        Button(onClick = onStartReset, enabled = !state.busy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Forgot password") }
+                    }
+                }
+                DriverAuthStep.EMAIL -> {
+                    OutlinedTextField(email, { email = it }, label = { Text("Verified email") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { onSendEmailCode(email) }, enabled = !state.busy && email.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Sending…" else "Send email code") }
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onBack, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Back") }
+                }
+                DriverAuthStep.EMAIL_CODE -> {
+                    OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, label = { Text("Six-digit email code") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { onVerifyEmailCode(code) }, enabled = !state.busy && code.length == 6, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Verifying…" else "Verify email") }
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onBack, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Back") }
+                }
+                DriverAuthStep.ACCOUNT_DETAILS -> {
+                    OutlinedTextField(name, { name = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(phone, { phone = it }, label = { Text("Phone login ID") }, placeholder = { Text("+91 98765 43210") }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(password, { password = it }, label = { Text("Create password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { onFinishRegistration(name, phone, password) }, enabled = !state.busy && name.isNotBlank() && phone.isNotBlank() && password.length >= 10, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Saving…" else "Finish account") }
+                }
+                DriverAuthStep.RESET_PASSWORD -> {
+                    OutlinedTextField(password, { password = it }, label = { Text("New password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { onFinishReset(password) }, enabled = !state.busy && password.length >= 10, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Saving…" else "Save new password") }
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Text(state.status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(20.dp))
-            Text("Only accounts given the DRIVER role and APPROVED status by Operations can publish routes or accept offers.", style = MaterialTheme.typography.bodySmall)
+            Text("Your email is verified with a code. Phone is an unverified login ID; password recovery always uses the verified email. Operations must assign DRIVER and APPROVED before route publishing is available.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
