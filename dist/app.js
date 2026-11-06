@@ -202,7 +202,7 @@
   function renderLocationSummary(mode) {
     const selectedStop = stopById(state.request[mode]);
     const label = state.locationLabels?.[mode] || { address: selectedStop.name, stopName: selectedStop.name };
-    el(`${mode}LocationText`).textContent = label.address || selectedStop.name;
+    el(`${mode}LocationText`).value = label.address || selectedStop.name;
     el(`${mode}LocationHint`).textContent = label.address === selectedStop.name ? "Approved pilot stop" : `Approved stop · ${selectedStop.short}`;
   }
 

@@ -16,7 +16,9 @@
   let geocoder;
   let autocompleteService;
   let placesService;
+  let inlinePlacesService;
   let predictionIndex = new Map();
+  const inlinePredictionIndex = { pickup: new Map(), drop: new Map() };
   let suggestionTimer;
   let selected;
 
@@ -78,6 +80,77 @@
     autocompleteService.getPlacePredictions({ input: query, componentRestrictions: { country: "in" } }, (predictions, status) => {
       if (status !== "OK" || !predictions?.length) { showPilotStopSuggestions(query); return; }
       showSuggestions(predictions.slice(0, 5).map((prediction) => ({ id: `google:${prediction.place_id}`, placeId: prediction.place_id, primary: prediction.structured_formatting?.main_text || prediction.description, secondary: prediction.structured_formatting?.secondary_text || "Google address" })));
+    });
+  }
+
+  function inlineSuggestionNode(mode) { return el(`${mode}InlineSuggestions`); }
+  function inlineInputNode(mode) { return el(`${mode}LocationText`); }
+
+  function clearInlineSuggestions(mode) {
+    const node = inlineSuggestionNode(mode);
+    if (!node) return;
+    node.hidden = true;
+    node.innerHTML = "";
+    inlinePredictionIndex[mode] = new Map();
+  }
+
+  function showInlineSuggestions(mode, items) {
+    const node = inlineSuggestionNode(mode);
+    if (!node) return;
+    inlinePredictionIndex[mode] = new Map(items.map((item) => [item.id, item]));
+    node.innerHTML = items.map((item) => `<button type="button" class="inline-location-suggestion" data-inline-location-suggestion="${escapeHtml(item.id)}"><span>${escapeHtml(item.primary)}</span><small>${escapeHtml(item.secondary || "Google address")}</small></button>`).join("");
+    node.hidden = !items.length;
+  }
+
+  function ensureInlinePlaces() {
+    if (!window.google?.maps?.places) return false;
+    if (!autocompleteService && google.maps.places.AutocompleteService) autocompleteService = new google.maps.places.AutocompleteService();
+    if (!inlinePlacesService && google.maps.places.PlacesService) inlinePlacesService = new google.maps.places.PlacesService(document.createElement("div"));
+    return Boolean(autocompleteService && inlinePlacesService);
+  }
+
+  function pilotMatches(query) {
+    const term = query.toLowerCase();
+    return approvedStops.filter((stop) => stop.name.toLowerCase().includes(term)).slice(0, 5)
+      .map((stop) => ({ id: `pilot:${stop.id}`, primary: stop.name, secondary: "Approved pilot stop", stop }));
+  }
+
+  function fetchInlineSuggestions(mode) {
+    const input = inlineInputNode(mode);
+    const query = input?.value.trim() || "";
+    clearInlineSuggestions(mode);
+    if (!query) return;
+    if (!ensureInlinePlaces()) { showInlineSuggestions(mode, pilotMatches(query)); return; }
+    autocompleteService.getPlacePredictions({ input: query, componentRestrictions: { country: "in" } }, (predictions, status) => {
+      if (status !== "OK" || !predictions?.length) { showInlineSuggestions(mode, pilotMatches(query)); return; }
+      showInlineSuggestions(mode, predictions.slice(0, 5).map((prediction) => ({
+        id: `google:${prediction.place_id}`,
+        placeId: prediction.place_id,
+        primary: prediction.structured_formatting?.main_text || prediction.description,
+        secondary: prediction.structured_formatting?.secondary_text || "Google address"
+      })));
+    });
+  }
+
+  function commitInlineLocation(mode, address, point, stop = nearestStop(point)) {
+    clearInlineSuggestions(mode);
+    const input = inlineInputNode(mode);
+    if (input) input.value = address;
+    window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: stop.id, address, stopName: stop.name } }));
+  }
+
+  function selectInlineSuggestion(mode, id) {
+    const item = inlinePredictionIndex[mode].get(id);
+    if (!item) return;
+    if (item.stop) {
+      commitInlineLocation(mode, item.stop.name, { lat: item.stop.lat, lng: item.stop.lng }, item.stop);
+      return;
+    }
+    if (!ensureInlinePlaces()) return;
+    inlinePlacesService.getDetails({ placeId: item.placeId, fields: ["formatted_address", "geometry", "name"] }, (place, status) => {
+      if (status !== "OK" || !place?.geometry?.location) return;
+      const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
+      commitInlineLocation(mode, place.formatted_address || place.name || item.primary, point);
     });
   }
 
@@ -168,7 +241,14 @@
     el("locationSearchInput").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); runTextSearch(); } });
     el("locationSearchInput").addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(fetchSuggestions, 180); });
     el("locationSuggestions").addEventListener("click", (event) => { const button = event.target.closest("[data-location-suggestion]"); if (button) selectSuggestion(button.dataset.locationSuggestion); });
-    window.addEventListener("lift:maps-ready", ensureGooglePicker);
+    ["pickup", "drop"].forEach((inlineMode) => {
+      const input = inlineInputNode(inlineMode);
+      const suggestions = inlineSuggestionNode(inlineMode);
+      input?.addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(() => fetchInlineSuggestions(inlineMode), 180); });
+      input?.addEventListener("keydown", (event) => { if (event.key === "Escape") clearInlineSuggestions(inlineMode); });
+      suggestions?.addEventListener("click", (event) => { const button = event.target.closest("[data-inline-location-suggestion]"); if (button) selectInlineSuggestion(inlineMode, button.dataset.inlineLocationSuggestion); });
+    });
+    window.addEventListener("lift:maps-ready", () => { ensureGooglePicker(); ensureInlinePlaces(); });
   });
 
   window.LiftLocationPicker = Object.freeze({ open });
