@@ -14,11 +14,10 @@
   let map;
   let marker;
   let geocoder;
-  let autocompleteService;
-  let placesService;
-  let inlinePlacesService;
+  let placesLibrary;
   let predictionIndex = new Map();
   const inlinePredictionIndex = { pickup: new Map(), drop: new Map() };
+  const autocompleteTokens = { dialog: null, pickup: null, drop: null };
   let suggestionTimer;
   let selected;
 
@@ -54,7 +53,18 @@
     showSuggestions(matches, "pilot");
   }
 
-  function selectSuggestion(id) {
+  async function loadPrediction(item, scope) {
+    const place = item.placePrediction.toPlace();
+    await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+    autocompleteTokens[scope] = null;
+    if (!place.location) throw new Error("PLACE_LOCATION_UNAVAILABLE");
+    return {
+      point: { lat: place.location.lat(), lng: place.location.lng() },
+      address: place.formattedAddress || place.displayName || item.primary
+    };
+  }
+
+  async function selectSuggestion(id) {
     const item = predictionIndex.get(id);
     if (!item) return;
     clearSuggestions();
@@ -63,24 +73,46 @@
       map?.panTo(point); map?.setZoom(16); updateSelection(point, item.stop.name); setStatus("Approved pilot stop selected.");
       return;
     }
-    if (!placesService) { setStatus("Google address details are unavailable. Select an approved pilot stop or pin the map."); return; }
     setStatus("Loading address…");
-    placesService.getDetails({ placeId: item.placeId, fields: ["formatted_address", "geometry", "name"] }, (place, status) => {
-      if (status !== "OK" || !place?.geometry?.location) { setStatus("Address details could not be loaded. Try another suggestion."); return; }
-      const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-      map.panTo(point); map.setZoom(16); updateSelection(point, place.formatted_address || place.name || item.primary); setStatus("Address selected. Confirm to continue.");
-    });
+    try {
+      const result = await loadPrediction(item, "dialog");
+      map.panTo(result.point); map.setZoom(16); updateSelection(result.point, result.address); setStatus("Address selected. Confirm to continue.");
+    } catch { setStatus("Address details could not be loaded. Try another suggestion."); }
   }
 
-  function fetchSuggestions() {
+  async function getGoogleSuggestions(query, scope) {
+    if (!window.google?.maps?.importLibrary) return null;
+    try {
+      if (!placesLibrary) placesLibrary = await google.maps.importLibrary("places");
+      const { AutocompleteSuggestion, AutocompleteSessionToken } = placesLibrary;
+      if (!AutocompleteSuggestion || !AutocompleteSessionToken) return null;
+      if (!autocompleteTokens[scope]) autocompleteTokens[scope] = new AutocompleteSessionToken();
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: query,
+        includedRegionCodes: ["IN"],
+        sessionToken: autocompleteTokens[scope]
+      });
+      return (suggestions || []).slice(0, 6).flatMap((suggestion, index) => {
+        const prediction = suggestion.placePrediction;
+        if (!prediction) return [];
+        return [{
+          id: `google:${scope}:${Date.now()}:${index}`,
+          placePrediction: prediction,
+          primary: prediction.text?.text || "Google address",
+          secondary: "Google address"
+        }];
+      });
+    } catch { return null; }
+  }
+
+  async function fetchSuggestions() {
     const query = el("locationSearchInput").value.trim();
     clearSuggestions();
-    if (query.length < 2) return;
-    if (!autocompleteService) { showPilotStopSuggestions(query); return; }
-    autocompleteService.getPlacePredictions({ input: query, componentRestrictions: { country: "in" } }, (predictions, status) => {
-      if (status !== "OK" || !predictions?.length) { showPilotStopSuggestions(query); return; }
-      showSuggestions(predictions.slice(0, 5).map((prediction) => ({ id: `google:${prediction.place_id}`, placeId: prediction.place_id, primary: prediction.structured_formatting?.main_text || prediction.description, secondary: prediction.structured_formatting?.secondary_text || "Google address" })));
-    });
+    if (!query) return;
+    const items = await getGoogleSuggestions(query, "dialog");
+    if (el("locationSearchInput").value.trim() !== query) return;
+    if (!items?.length) { showPilotStopSuggestions(query); return; }
+    showSuggestions(items);
   }
 
   function inlineSuggestionNode(mode) { return el(`${mode}InlineSuggestions`); }
@@ -102,34 +134,20 @@
     node.hidden = !items.length;
   }
 
-  function ensureInlinePlaces() {
-    if (!window.google?.maps?.places) return false;
-    if (!autocompleteService && google.maps.places.AutocompleteService) autocompleteService = new google.maps.places.AutocompleteService();
-    if (!inlinePlacesService && google.maps.places.PlacesService) inlinePlacesService = new google.maps.places.PlacesService(document.createElement("div"));
-    return Boolean(autocompleteService && inlinePlacesService);
-  }
-
   function pilotMatches(query) {
     const term = query.toLowerCase();
     return approvedStops.filter((stop) => stop.name.toLowerCase().includes(term)).slice(0, 5)
       .map((stop) => ({ id: `pilot:${stop.id}`, primary: stop.name, secondary: "Approved pilot stop", stop }));
   }
 
-  function fetchInlineSuggestions(mode) {
+  async function fetchInlineSuggestions(mode) {
     const input = inlineInputNode(mode);
     const query = input?.value.trim() || "";
     clearInlineSuggestions(mode);
     if (!query) return;
-    if (!ensureInlinePlaces()) { showInlineSuggestions(mode, pilotMatches(query)); return; }
-    autocompleteService.getPlacePredictions({ input: query, componentRestrictions: { country: "in" } }, (predictions, status) => {
-      if (status !== "OK" || !predictions?.length) { showInlineSuggestions(mode, pilotMatches(query)); return; }
-      showInlineSuggestions(mode, predictions.slice(0, 5).map((prediction) => ({
-        id: `google:${prediction.place_id}`,
-        placeId: prediction.place_id,
-        primary: prediction.structured_formatting?.main_text || prediction.description,
-        secondary: prediction.structured_formatting?.secondary_text || "Google address"
-      })));
-    });
+    const items = await getGoogleSuggestions(query, mode);
+    if (inlineInputNode(mode)?.value.trim() !== query) return;
+    showInlineSuggestions(mode, items?.length ? items : pilotMatches(query));
   }
 
   function commitInlineLocation(mode, address, point, stop = nearestStop(point)) {
@@ -139,19 +157,17 @@
     window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: stop.id, address, stopName: stop.name } }));
   }
 
-  function selectInlineSuggestion(mode, id) {
+  async function selectInlineSuggestion(mode, id) {
     const item = inlinePredictionIndex[mode].get(id);
     if (!item) return;
     if (item.stop) {
       commitInlineLocation(mode, item.stop.name, { lat: item.stop.lat, lng: item.stop.lng }, item.stop);
       return;
     }
-    if (!ensureInlinePlaces()) return;
-    inlinePlacesService.getDetails({ placeId: item.placeId, fields: ["formatted_address", "geometry", "name"] }, (place, status) => {
-      if (status !== "OK" || !place?.geometry?.location) return;
-      const point = { lat: place.geometry.location.lat(), lng: place.geometry.location.lng() };
-      commitInlineLocation(mode, place.formatted_address || place.name || item.primary, point);
-    });
+    try {
+      const result = await loadPrediction(item, mode);
+      commitInlineLocation(mode, result.address, result.point);
+    } catch { clearInlineSuggestions(mode); }
   }
 
   function updateSelection(point, address) {
@@ -180,10 +196,6 @@
     map = new google.maps.Map(el("locationPickerMap"), { center: coimbatore, zoom: 12, disableDefaultUI: true, zoomControl: true, clickableIcons: false });
     marker = new google.maps.Marker({ map, visible: false, draggable: true, title: "Selected location" });
     geocoder = new google.maps.Geocoder();
-    if (google.maps.places?.AutocompleteService && google.maps.places?.PlacesService) {
-      autocompleteService = new google.maps.places.AutocompleteService();
-      placesService = new google.maps.places.PlacesService(map);
-    }
     map.addListener("click", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
     marker.addListener("dragend", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
 
@@ -248,7 +260,10 @@
       input?.addEventListener("keydown", (event) => { if (event.key === "Escape") clearInlineSuggestions(inlineMode); });
       suggestions?.addEventListener("click", (event) => { const button = event.target.closest("[data-inline-location-suggestion]"); if (button) selectInlineSuggestion(inlineMode, button.dataset.inlineLocationSuggestion); });
     });
-    window.addEventListener("lift:maps-ready", () => { ensureGooglePicker(); ensureInlinePlaces(); });
+    window.addEventListener("lift:maps-ready", () => {
+      ensureGooglePicker();
+      if (window.google?.maps?.importLibrary) google.maps.importLibrary("places").then((library) => { placesLibrary = library; }).catch(() => {});
+    });
   });
 
   window.LiftLocationPicker = Object.freeze({ open });
