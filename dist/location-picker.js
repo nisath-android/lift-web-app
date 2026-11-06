@@ -102,7 +102,10 @@
           secondary: "Google address"
         }];
       });
-    } catch { return null; }
+    } catch (error) {
+      console.warn("Places API (New) autocomplete is unavailable", error);
+      return null;
+    }
   }
 
   async function fetchSuggestions() {
