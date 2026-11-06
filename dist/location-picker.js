@@ -15,6 +15,7 @@
   let marker;
   let geocoder;
   let placesLibrary;
+  let placesBlocked = false;
   let predictionIndex = new Map();
   const inlinePredictionIndex = { pickup: new Map(), drop: new Map() };
   const autocompleteTokens = { dialog: null, pickup: null, drop: null };
@@ -92,6 +93,7 @@
         includedRegionCodes: ["IN"],
         sessionToken: autocompleteTokens[scope]
       });
+      placesBlocked = false;
       return (suggestions || []).slice(0, 6).flatMap((suggestion, index) => {
         const prediction = suggestion.placePrediction;
         if (!prediction) return [];
@@ -103,6 +105,7 @@
         }];
       });
     } catch (error) {
+      placesBlocked = true;
       console.warn("Places API (New) autocomplete is unavailable", error);
       return null;
     }
@@ -133,7 +136,9 @@
     const node = inlineSuggestionNode(mode);
     if (!node) return;
     inlinePredictionIndex[mode] = new Map(items.map((item) => [item.id, item]));
-    node.innerHTML = items.map((item) => `<button type="button" class="inline-location-suggestion" data-inline-location-suggestion="${escapeHtml(item.id)}"><span>${escapeHtml(item.primary)}</span><small>${escapeHtml(item.secondary || "Google address")}</small></button>`).join("");
+    node.innerHTML = items.map((item) => item.notice
+      ? `<div class="inline-location-notice" role="status"><strong>${escapeHtml(item.primary)}</strong><small>${escapeHtml(item.secondary)}</small></div>`
+      : `<button type="button" class="inline-location-suggestion" data-inline-location-suggestion="${escapeHtml(item.id)}" role="option"><span class="inline-suggestion-icon" aria-hidden="true">⌖</span><span class="inline-suggestion-copy"><strong>${escapeHtml(item.primary)}</strong><small>${escapeHtml(item.secondary || "Google address")}</small></span></button>`).join("");
     node.hidden = !items.length;
   }
 
@@ -150,7 +155,13 @@
     if (!query) return;
     const items = await getGoogleSuggestions(query, mode);
     if (inlineInputNode(mode)?.value.trim() !== query) return;
-    showInlineSuggestions(mode, items?.length ? items : pilotMatches(query));
+    const fallback = pilotMatches(query);
+    showInlineSuggestions(mode, items?.length ? items : (fallback.length ? fallback : (placesBlocked ? [{
+      id: "places-unavailable",
+      notice: true,
+      primary: "Address search is temporarily unavailable",
+      secondary: "Use the map-pin button to choose this location."
+    }] : [])));
   }
 
   function commitInlineLocation(mode, address, point, stop = nearestStop(point)) {
