@@ -9,6 +9,8 @@
   let pickupMarker;
   let dropMarker;
   let passengerLine;
+  let roadPolylines = [];
+  let routeRequestVersion = 0;
 
   const setMarker = (marker, position, label, title, color) => {
     if (marker) marker.setMap(null);
@@ -28,6 +30,8 @@
     pickupMarker = setMarker(pickupMarker, pickup.point, "P", `Pickup: ${pickup.address}`, "#008b9a");
     dropMarker = setMarker(dropMarker, drop.point, "D", `Drop: ${drop.address}`, "#2563eb");
     if (passengerLine) passengerLine.setMap(null);
+    roadPolylines.forEach((polyline) => polyline.setMap(null));
+    roadPolylines = [];
     passengerLine = new google.maps.Polyline({
       map,
       path: [pickup.point, drop.point],
@@ -42,11 +46,38 @@
     else map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 });
   };
 
+  const renderRoadFollowingRoute = async () => {
+    if (!map || !passengerLocations.pickup?.point || !passengerLocations.drop?.point) return;
+    const requestVersion = ++routeRequestVersion;
+    const pickup = passengerLocations.pickup.point;
+    const drop = passengerLocations.drop.point;
+    try {
+      const { Route } = await google.maps.importLibrary("routes");
+      const { routes } = await Route.computeRoutes({
+        origin: pickup,
+        destination: drop,
+        travelMode: "DRIVING",
+        fields: ["path"]
+      });
+      if (requestVersion !== routeRequestVersion || !routes?.[0]) return;
+      if (passengerLine) passengerLine.setMap(null);
+      roadPolylines.forEach((polyline) => polyline.setMap(null));
+      roadPolylines = routes[0].createPolylines({
+        polylineOptions: { strokeColor: "#2563eb", strokeOpacity: 0.95, strokeWeight: 6 }
+      });
+      roadPolylines.forEach((polyline) => polyline.setMap(map));
+    } catch (error) {
+      // The direct line remains visible while the Routes API/key restriction propagates or is unavailable.
+      console.warn("Road route could not be loaded", error);
+    }
+  };
+
   window.addEventListener("lift:location-selected", (event) => {
     const { mode, point, address } = event.detail || {};
     if (!passengerLocations[mode] || !point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return;
     passengerLocations[mode] = { point, address: address || `${mode === "pickup" ? "Pickup" : "Drop"} location` };
     renderPassengerRoute();
+    renderRoadFollowingRoute();
   });
 
   window.initLiftGoogleMap = () => {
