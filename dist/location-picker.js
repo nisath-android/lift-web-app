@@ -168,7 +168,7 @@
     clearInlineSuggestions(mode);
     const input = inlineInputNode(mode);
     if (input) input.value = address;
-    window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: stop.id, address, stopName: stop.name } }));
+    window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: stop.id, address, stopName: stop.name, point } }));
   }
 
   async function selectInlineSuggestion(mode, id) {
@@ -255,7 +255,7 @@
 
   function confirm() {
     if (!selected) return;
-    window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: selected.stop.id, address: selected.address, stopName: selected.stop.name } }));
+    window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: selected.stop.id, address: selected.address, stopName: selected.stop.name, point: selected.point } }));
     dialog().close();
   }
 
