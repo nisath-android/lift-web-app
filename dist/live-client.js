@@ -14,6 +14,18 @@
   const el = (id) => document.getElementById(id);
   const notify = () => listeners.forEach((listener) => listener(session));
 
+  function updateAppAccess(nextSession, { keepLocked = false } = {}) {
+    const authenticated = Boolean(nextSession?.user) && !keepLocked;
+    document.body.classList.remove("auth-pending");
+    document.body.classList.toggle("auth-required", !authenticated);
+    const dialog = el("authDialog");
+    if (authenticated && dialog?.open) dialog.close();
+    if (!authenticated && dialog && !dialog.open) {
+      if (!nextSession) showSignIn();
+      dialog.showModal();
+    }
+  }
+
   function normalisePhone(value) {
     const compact = value.trim().replace(/[\s()-]/g, "");
     if (/^\d{10}$/.test(compact)) return `+91${compact}`;
@@ -112,13 +124,15 @@
   }
 
   async function initialise() {
-    if (!client) { setStatus(); return; }
+    if (!client) { setStatus(); updateAppAccess(null); return; }
     const { data } = await client.auth.getSession();
     session = data.session;
     setStatus();
+    updateAppAccess(session);
     client.auth.onAuthStateChange((_event, nextSession) => {
       session = nextSession;
       setStatus();
+      updateAppAccess(nextSession, { keepLocked: authFlow === "sign-up" || authFlow === "reset" });
       notify();
     });
   }
@@ -194,7 +208,8 @@
     try {
       await invokeAuthGateway(payload);
       setFeedback("Account ready. Your phone number and password can now be used to sign in.");
-      setTimeout(() => el("authDialog")?.close(), 900);
+      authFlow = "sign-in";
+      updateAppAccess(session);
     } catch (error) {
       setFeedback(authError(error), true);
     }
@@ -233,6 +248,13 @@
     el("showSignUp")?.addEventListener("click", () => showEmailFlow("sign-up"));
     el("showReset")?.addEventListener("click", () => showEmailFlow("reset"));
     document.querySelectorAll(".authBack").forEach((button) => button.addEventListener("click", showSignIn));
+    el("authDialog")?.addEventListener("cancel", (event) => {
+      if (!session || authFlow === "sign-up" || authFlow === "reset") event.preventDefault();
+    });
+    el("authDialog")?.addEventListener("close", () => {
+      const mustStayOpen = !session || authFlow === "sign-up" || authFlow === "reset";
+      if (mustStayOpen && !document.body.classList.contains("auth-pending")) setTimeout(() => updateAppAccess(session, { keepLocked: true }), 0);
+    });
     initialise();
   });
 })();
