@@ -47,7 +47,7 @@
   ];
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
-  const defaultRequest = { pickup: "nava-india", drop: "", seats: 1, departure: "8:30 AM · Today" };
+  const defaultRequest = { pickup: "nava-india", drop: "peelamedu", seats: 1, departure: "Now" };
   let state;
   const live = () => window.LiftLive;
 
@@ -76,7 +76,7 @@
       liveSelectedOffer: null,
       locationLabels: {
         pickup: { address: "Nava India", stopName: "Nava India" },
-        drop: { address: "", stopName: "" }
+        drop: { address: "Peelamedu", stopName: "Peelamedu" }
       }
     };
   }

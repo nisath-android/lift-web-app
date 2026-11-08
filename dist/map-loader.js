@@ -7,13 +7,12 @@
 
   const passengerLocations = {
     pickup: { point: { lat: 11.022917, lng: 76.982641 }, address: "Nava India" },
-    drop: null
+    drop: { point: { lat: 11.030327, lng: 77.020746 }, address: "Peelamedu" }
   };
 
   let map;
   let pickupMarker;
   let dropMarker;
-  let corridorPolyline;
   let passengerPolyline;
   let driverVehicleMarker;
   let corridorCoords = [];
@@ -53,6 +52,28 @@
       points.push({ lat: lat / 1e5, lng: lng / 1e5 });
     }
     return points;
+  }
+
+  function distanceSq(p1, p2) {
+    const dLat = p1.lat - p2.lat;
+    const dLng = p1.lng - p2.lng;
+    return dLat * dLat + dLng * dLng;
+  }
+
+  function extractCorridorSegment(pickup, drop) {
+    if (!corridorCoords || corridorCoords.length < 2) return [pickup, drop];
+    let minPickupIdx = 0, minDropIdx = 0;
+    let minPickupDist = Infinity, minDropDist = Infinity;
+    corridorCoords.forEach((pt, i) => {
+      const dP = distanceSq(pt, pickup);
+      if (dP < minPickupDist) { minPickupDist = dP; minPickupIdx = i; }
+      const dD = distanceSq(pt, drop);
+      if (dD < minDropDist) { minDropDist = dD; minDropIdx = i; }
+    });
+    const start = Math.min(minPickupIdx, minDropIdx);
+    const end = Math.max(minPickupIdx, minDropIdx);
+    const segment = corridorCoords.slice(start, end + 1);
+    return minPickupIdx <= minDropIdx ? segment : segment.reverse();
   }
 
   const setMarker = (marker, position, label, title, color) => {
@@ -128,46 +149,7 @@
     return null;
   };
 
-  const renderRoadFollowingRoute = async () => {
-    if (!map || !passengerLocations.pickup?.point) return;
-    renderMarkers();
-
-    // If drop is not yet chosen, clear previous route and focus on pickup & approaching driver
-    if (!passengerLocations.drop?.point) {
-      if (passengerPolyline) {
-        passengerPolyline.setMap(null);
-        passengerPolyline = null;
-      }
-      return;
-    }
-
-    const requestVersion = ++routeRequestVersion;
-    const pickup = passengerLocations.pickup.point;
-    const drop = passengerLocations.drop.point;
-
-    const routeData = await fetchRoadRoute(pickup, drop);
-    if (requestVersion !== routeRequestVersion) return;
-
-    let points = routeData?.points;
-
-    // Fallback if dynamic fetch is blocked or offline
-    if (!points || points.length < 2) {
-      const isDefaultRoute =
-        Math.abs(pickup.lat - 11.022917) < 0.008 &&
-        Math.abs(pickup.lng - 76.982641) < 0.008 &&
-        Math.abs(drop.lat - 11.030327) < 0.008 &&
-        Math.abs(drop.lng - 77.020746) < 0.008;
-
-      if (isDefaultRoute) {
-        points = decodePolyline(DEFAULT_PASSENGER_ROAD_POLYLINE);
-      }
-    }
-
-    if (!points || points.length < 2) {
-      console.warn("Could not determine road polyline for selected points");
-      return;
-    }
-
+  function drawPolyline(points, distanceMeters) {
     if (passengerPolyline) passengerPolyline.setMap(null);
     passengerPolyline = new google.maps.Polyline({
       map,
@@ -179,8 +161,8 @@
 
     const badge = document.getElementById("mapBadge") || document.querySelector(".map-badge");
     if (badge) {
-      if (routeData?.distanceMeters) {
-        badge.textContent = `${(routeData.distanceMeters / 1000).toFixed(1)} km · Shortest Route`;
+      if (distanceMeters) {
+        badge.textContent = `${(distanceMeters / 1000).toFixed(1)} km · Shortest Route`;
       } else {
         badge.textContent = "Direct Road Route";
       }
@@ -192,6 +174,46 @@
       bounds.extend(driverVehicleMarker.getPosition());
     }
     map.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+  }
+
+  const renderRoadFollowingRoute = async () => {
+    if (!map || !passengerLocations.pickup?.point || !passengerLocations.drop?.point) return;
+    renderMarkers();
+
+    const requestVersion = ++routeRequestVersion;
+    const pickup = passengerLocations.pickup.point;
+    const drop = passengerLocations.drop.point;
+
+    const isDefaultRoute =
+      Math.abs(pickup.lat - 11.022917) < 0.008 &&
+      Math.abs(pickup.lng - 76.982641) < 0.008 &&
+      Math.abs(drop.lat - 11.030327) < 0.008 &&
+      Math.abs(drop.lng - 77.020746) < 0.008;
+
+    // Immediately draw cached/fallback road points so the map is never without a polyline
+    if (!passengerPolyline) {
+      const immediatePoints = isDefaultRoute
+        ? decodePolyline(DEFAULT_PASSENGER_ROAD_POLYLINE)
+        : extractCorridorSegment(pickup, drop);
+      if (immediatePoints && immediatePoints.length >= 2) {
+        drawPolyline(immediatePoints);
+      }
+    }
+
+    // Now asynchronously compute the dynamic shortest road route
+    const routeData = await fetchRoadRoute(pickup, drop);
+    if (requestVersion !== routeRequestVersion) return;
+
+    let points = routeData?.points;
+    if (!points || points.length < 2) {
+      points = isDefaultRoute
+        ? decodePolyline(DEFAULT_PASSENGER_ROAD_POLYLINE)
+        : extractCorridorSegment(pickup, drop);
+    }
+
+    if (points && points.length >= 2) {
+      drawPolyline(points, routeData?.distanceMeters);
+    }
   };
 
   // Updates driver vehicle position along the corridor and live ETA badge
@@ -222,13 +244,14 @@
 
     // Update floating driver tracking badge
     const badgeText = document.getElementById("driverMapBadgeText");
+    const pickupName = passengerLocations.pickup?.address || "pickup";
     if (badgeText) {
       if (driverCoordIndex < 110) {
-        badgeText.textContent = "🚗 Driver Asha · On Avinashi Rd · Approaching pickup (~3 mins)";
+        badgeText.textContent = `🚗 Driver Asha · Approaching ${pickupName} (~3 mins)`;
       } else if (driverCoordIndex < 140) {
-        badgeText.textContent = "🚗 Driver Asha · 300m away · Arriving shortly";
+        badgeText.textContent = `🚗 Driver Asha · 300m away · Arriving shortly`;
       } else {
-        badgeText.textContent = "🚗 Driver Asha · On corridor · Moving onward";
+        badgeText.textContent = `🚗 Driver Asha · En route`;
       }
     }
   }
@@ -237,7 +260,6 @@
     if (driverAnimationTimer) clearInterval(driverAnimationTimer);
     updateDriverLocation();
     driverAnimationTimer = setInterval(() => {
-      // Driver moves forward along the actual road points towards and past pickup
       driverCoordIndex = (driverCoordIndex + 1);
       if (driverCoordIndex >= corridorCoords.length) driverCoordIndex = 20;
       updateDriverLocation();
@@ -274,6 +296,7 @@
 
     renderMarkers();
     startDriverTracking();
+    renderRoadFollowingRoute();
 
     canvas.parentElement.classList.add("maps-loaded");
     window.dispatchEvent(new Event("lift:maps-ready"));
