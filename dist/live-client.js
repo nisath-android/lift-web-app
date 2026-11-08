@@ -93,8 +93,8 @@
     authFlow = flow;
     pendingEmail = "";
     el("authEmailHint").textContent = flow === "reset"
-      ? "We will send a six-digit code to your verified recovery email."
-      : "We will send a six-digit code to verify your email before account setup.";
+      ? "We will send a verification code to your verified recovery email."
+      : "We will send a verification code to verify your email before account setup.";
     showPanel("authEmailPanel");
   }
 
@@ -173,7 +173,7 @@
       });
       if (error) throw error;
       pendingEmail = email;
-      el("authCodeHint").textContent = `Enter the six-digit code sent to ${email}.`;
+      el("authCodeHint").textContent = `Enter the verification code sent to ${email}.`;
       showPanel("authCodePanel");
       setFeedback("Email code sent. Check inbox and spam folder.");
     } catch (error) {

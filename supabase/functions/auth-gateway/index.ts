@@ -9,6 +9,7 @@ const defaultOrigins = [
   "http://127.0.0.1:4174",
   "http://localhost:4174",
   "https://lift-route-match-poc-2026.surebread129.chatgpt.site",
+  "https://lift-web-app.vercel.app",
 ];
 
 const allowedOrigins = new Set(

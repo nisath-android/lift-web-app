@@ -156,9 +156,9 @@ private fun DriverAuthScreen(
                     Button(onClick = onBack, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Back") }
                 }
                 DriverAuthStep.EMAIL_CODE -> {
-                    OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) }, label = { Text("Six-digit email code") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(code, { code = it.filter(Char::isDigit).take(8) }, label = { Text("Email verification code") }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { onVerifyEmailCode(code) }, enabled = !state.busy && code.length == 6, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Verifying…" else "Verify email") }
+                    Button(onClick = { onVerifyEmailCode(code) }, enabled = !state.busy && code.length in 6..8, modifier = Modifier.fillMaxWidth()) { Text(if (state.busy) "Verifying…" else "Verify email") }
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = onBack, enabled = !state.busy, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text("Back") }
                 }
