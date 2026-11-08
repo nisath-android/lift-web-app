@@ -10,6 +10,8 @@
     { id: "saravanampatti", name: "Saravanampatti", lat: 11.078776, lng: 77.001151 }
   ];
 
+  const HISTORY_KEY = "lift:drop_search_history";
+
   let mode = "pickup";
   let map;
   let marker;
@@ -33,6 +35,84 @@
   const nearestStop = (point) => approvedStops.reduce((nearest, stop) => distanceKm(point, stop) < distanceKm(point, nearest) ? stop : nearest, approvedStops[0]);
   const setStatus = (message) => { el("locationStatus").textContent = message; };
   const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+
+  function getDropHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveDropHistory(item) {
+    if (!item || !item.address) return;
+    try {
+      let history = getDropHistory();
+      history = history.filter((h) => (item.stopId ? h.stopId !== item.stopId : h.primary !== item.address));
+      history.unshift({
+        id: item.stopId ? `history:${item.stopId}` : `history:${Date.now()}`,
+        primary: item.address,
+        secondary: item.stopName ? `Approved pilot stop: ${item.stopName}` : "Recent destination",
+        stop: item.stop,
+        stopId: item.stopId,
+        point: item.point
+      });
+      history = history.slice(0, 6);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (err) {
+      console.warn("Could not save drop history", err);
+    }
+  }
+
+  function clearDropHistory() {
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch {}
+  }
+
+  function showDropHistorySuggestions() {
+    const node = inlineSuggestionNode("drop");
+    if (!node) return;
+    const history = getDropHistory();
+    const popularStops = [
+      { id: "pilot:peelamedu", primary: "Peelamedu", secondary: "Approved pilot stop", stop: approvedStops.find((s) => s.id === "peelamedu") },
+      { id: "pilot:hope-college", primary: "Hope College", secondary: "Approved pilot stop", stop: approvedStops.find((s) => s.id === "hope-college") },
+      { id: "pilot:saravanampatti", primary: "Saravanampatti", secondary: "Approved pilot stop", stop: approvedStops.find((s) => s.id === "saravanampatti") }
+    ];
+
+    const items = history.length ? history : popularStops;
+    inlinePredictionIndex["drop"] = new Map(items.map((item) => [item.id, item]));
+
+    const headerHtml = `
+      <div class="history-dropdown-header">
+        <span>${history.length ? "🕒 Previous Searches" : "⭐ Popular Destinations"}</span>
+        ${history.length ? `<button type="button" class="history-clear-btn" id="clearDropHistoryBtn">Clear history</button>` : ""}
+      </div>
+    `;
+
+    const suggestionsHtml = items.map((item) => `
+      <button type="button" class="inline-location-suggestion history-item" data-inline-location-suggestion="${escapeHtml(item.id)}" role="option">
+        <span class="inline-suggestion-icon" aria-hidden="true">${history.length ? "🕒" : "📍"}</span>
+        <span class="inline-suggestion-copy">
+          <strong>${escapeHtml(item.primary)}</strong>
+          <small>${escapeHtml(item.secondary || "Approved pilot stop")}</small>
+        </span>
+      </button>
+    `).join("");
+
+    node.innerHTML = headerHtml + suggestionsHtml;
+    node.hidden = false;
+
+    const clearBtn = node.querySelector("#clearDropHistoryBtn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        clearDropHistory();
+        showDropHistorySuggestions();
+      });
+    }
+  }
 
   function clearSuggestions() {
     el("locationSuggestions").hidden = true;
@@ -152,7 +232,10 @@
     const input = inlineInputNode(mode);
     const query = input?.value.trim() || "";
     clearInlineSuggestions(mode);
-    if (!query) return;
+    if (!query) {
+      if (mode === "drop") showDropHistorySuggestions();
+      return;
+    }
     const items = await getGoogleSuggestions(query, mode);
     if (inlineInputNode(mode)?.value.trim() !== query) return;
     const fallback = pilotMatches(query);
@@ -168,6 +251,9 @@
     clearInlineSuggestions(mode);
     const input = inlineInputNode(mode);
     if (input) input.value = address;
+    if (mode === "drop") {
+      saveDropHistory({ address, stopName: stop?.name, stopId: stop?.id, stop, point });
+    }
     window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: stop.id, address, stopName: stop.name, point } }));
   }
 
@@ -176,6 +262,10 @@
     if (!item) return;
     if (item.stop) {
       commitInlineLocation(mode, item.stop.name, { lat: item.stop.lat, lng: item.stop.lng }, item.stop);
+      return;
+    }
+    if (item.point && item.primary) {
+      commitInlineLocation(mode, item.primary, item.point, item.stop || nearestStop(item.point));
       return;
     }
     try {
@@ -212,7 +302,6 @@
     geocoder = new google.maps.Geocoder();
     map.addListener("click", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
     marker.addListener("dragend", (event) => reverseGeocode({ lat: event.latLng.lat(), lng: event.latLng.lng() }));
-
     return true;
   }
 
@@ -237,6 +326,30 @@
     );
   }
 
+  function initAutoLocation(forcePrompt = false) {
+    const permDialog = el("locationPermissionDialog");
+    if (!navigator.geolocation) {
+      if (permDialog) permDialog.showModal();
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (permDialog?.open) permDialog.close();
+        const point = { lat: position.coords.latitude, lng: position.coords.longitude };
+        const stop = nearestStop(point);
+        const address = `Current location (${stop.name})`;
+        commitInlineLocation("pickup", address, point, stop);
+      },
+      (error) => {
+        console.warn("Geolocation denied or unavailable", error);
+        if (permDialog && !permDialog.open) {
+          permDialog.showModal();
+        }
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  }
+
   function open(nextMode) {
     mode = nextMode;
     selected = null;
@@ -255,30 +368,57 @@
 
   function confirm() {
     if (!selected) return;
+    if (mode === "drop") {
+      saveDropHistory({ address: selected.address, stopName: selected.stop?.name, stopId: selected.stop?.id, stop: selected.stop, point: selected.point });
+    }
     window.dispatchEvent(new CustomEvent("lift:location-selected", { detail: { mode, stopId: selected.stop.id, address: selected.address, stopName: selected.stop.name, point: selected.point } }));
     dialog().close();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    el("locationDialogClose").addEventListener("click", () => dialog().close());
-    el("locationCancelButton").addEventListener("click", () => dialog().close());
-    el("locationConfirmButton").addEventListener("click", confirm);
-    el("locationCurrentButton").addEventListener("click", useCurrentLocation);
-    el("locationSearchInput").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); runTextSearch(); } });
-    el("locationSearchInput").addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(fetchSuggestions, 180); });
-    el("locationSuggestions").addEventListener("click", (event) => { const button = event.target.closest("[data-location-suggestion]"); if (button) selectSuggestion(button.dataset.locationSuggestion); });
+    el("locationDialogClose")?.addEventListener("click", () => dialog().close());
+    el("locationCancelButton")?.addEventListener("click", () => dialog().close());
+    el("locationConfirmButton")?.addEventListener("click", confirm);
+    el("locationCurrentButton")?.addEventListener("click", useCurrentLocation);
+    el("locationSearchInput")?.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); runTextSearch(); } });
+    el("locationSearchInput")?.addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(fetchSuggestions, 180); });
+    el("locationSuggestions")?.addEventListener("click", (event) => { const button = event.target.closest("[data-location-suggestion]"); if (button) selectSuggestion(button.dataset.locationSuggestion); });
+
+    // Location Permission Dialog handlers
+    el("permEnableLocationBtn")?.addEventListener("click", () => initAutoLocation(true));
+    el("permPickMapBtn")?.addEventListener("click", () => { el("locationPermissionDialog")?.close(); open("pickup"); });
+    el("permDismissBtn")?.addEventListener("click", () => el("locationPermissionDialog")?.close());
+
     ["pickup", "drop"].forEach((inlineMode) => {
       const input = inlineInputNode(inlineMode);
       const suggestions = inlineSuggestionNode(inlineMode);
       input?.addEventListener("input", () => { clearTimeout(suggestionTimer); suggestionTimer = setTimeout(() => fetchInlineSuggestions(inlineMode), 180); });
       input?.addEventListener("keydown", (event) => { if (event.key === "Escape") clearInlineSuggestions(inlineMode); });
       suggestions?.addEventListener("click", (event) => { const button = event.target.closest("[data-inline-location-suggestion]"); if (button) selectInlineSuggestion(inlineMode, button.dataset.inlineLocationSuggestion); });
+
+      if (inlineMode === "drop") {
+        input?.addEventListener("focus", () => {
+          if (!input.value.trim()) showDropHistorySuggestions();
+        });
+        input?.addEventListener("click", () => {
+          if (!input.value.trim()) showDropHistorySuggestions();
+        });
+      }
     });
+
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".drop-field")) clearInlineSuggestions("drop");
+      if (!event.target.closest(".pickup-field")) clearInlineSuggestions("pickup");
+    });
+
     window.addEventListener("lift:maps-ready", () => {
       ensureGooglePicker();
       if (window.google?.maps?.importLibrary) google.maps.importLibrary("places").then((library) => { placesLibrary = library; }).catch(() => {});
     });
+
+    // Auto-request current location for default pickup point
+    setTimeout(() => initAutoLocation(false), 300);
   });
 
-  window.LiftLocationPicker = Object.freeze({ open });
+  window.LiftLocationPicker = Object.freeze({ open, requestCurrentLocation: initAutoLocation, showDropHistorySuggestions });
 })();

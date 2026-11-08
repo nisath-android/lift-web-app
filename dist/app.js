@@ -47,7 +47,7 @@
   ];
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
-  const defaultRequest = { pickup: "nava-india", drop: "peelamedu", seats: 1, departure: "8:30 AM · Today" };
+  const defaultRequest = { pickup: "nava-india", drop: "", seats: 1, departure: "8:30 AM · Today" };
   let state;
   const live = () => window.LiftLive;
 
@@ -76,7 +76,7 @@
       liveSelectedOffer: null,
       locationLabels: {
         pickup: { address: "Nava India", stopName: "Nava India" },
-        drop: { address: "Peelamedu", stopName: "Peelamedu" }
+        drop: { address: "", stopName: "" }
       }
     };
   }
@@ -124,21 +124,35 @@
 
   function evaluateDriver(driver) {
     const { pickup, drop, seats, departure } = state.request;
+    const requestedAt = departureMinutes(departure);
+    const latestPickupAt = requestedAt + 30;
     const pickupIndex = requestedStopIndex(driver, pickup);
     const dropIndex = requestedStopIndex(driver, drop);
     const pickupStop = stopById(pickup);
     const dropStop = stopById(drop);
-    const requestedAt = departureMinutes(departure);
-    const latestPickupAt = requestedAt + 30;
     const pickupAtMinutes = pickupEtaMinutes(driver, pickup);
     const reasons = [];
     let decision = "eligible";
+
+    if (!drop || dropIndex < 0) {
+      return {
+        driver,
+        pickupIndex,
+        dropIndex: -1,
+        pickupAtMinutes,
+        score: 0,
+        reasons: ["Choose your destination above to evaluate route compatibility"],
+        decision: "choose-drop",
+        requestedAt,
+        latestPickupAt
+      };
+    }
 
     if (driver.state !== "PUBLISHED") {
       decision = "unavailable";
       reasons.push("Route is not published");
     }
-    if (pickupIndex < 0 || dropIndex < 0) {
+    if (pickupIndex < 0) {
       decision = "outside-route";
       reasons.push("Requested stops are not on this route");
     } else if (dropIndex <= pickupIndex) {
@@ -190,9 +204,9 @@
     const drop = el("dropSelect");
     const options = stops.map((stop) => `<option value="${stop.id}">${stop.name}</option>`).join("");
     pickup.innerHTML = options;
-    drop.innerHTML = options;
+    drop.innerHTML = `<option value="">Select destination</option>` + options;
     pickup.value = state.request.pickup;
-    drop.value = state.request.drop;
+    drop.value = state.request.drop || "";
     el("seatSelect").value = String(state.request.seats);
     el("departureSelect").value = state.request.departure;
     renderLocationSummary("pickup");
@@ -201,7 +215,12 @@
 
   function renderLocationSummary(mode) {
     const selectedStop = stopById(state.request[mode]);
-    const label = state.locationLabels?.[mode] || { address: selectedStop.name, stopName: selectedStop.name };
+    const label = state.locationLabels?.[mode] || { address: selectedStop?.name || "", stopName: selectedStop?.name || "" };
+    if (!selectedStop) {
+      el(`${mode}LocationText`).value = label.address || "";
+      el(`${mode}LocationHint`).textContent = mode === "drop" ? "Select destination" : "Choose pickup";
+      return;
+    }
     el(`${mode}LocationText`).value = label.address || selectedStop.name;
     el(`${mode}LocationHint`).textContent = label.address === selectedStop.name ? "Approved pilot stop" : `Approved stop · ${selectedStop.short}`;
   }
@@ -227,6 +246,13 @@
         </div>
         <span class="fit-badge">${tripComplete ? "Trip complete" : "Route reserved"}</span>
       </article>`;
+      renderMatchExplainer();
+      return;
+    }
+
+    if (!state.request.drop) {
+      el("matchCount").textContent = "0";
+      el("matchList").innerHTML = `<div class="no-match card"><strong>Where are you going?</strong><span>Enter or select your drop location above to view compatible drivers on this corridor.</span></div>`;
       renderMatchExplainer();
       return;
     }
@@ -289,6 +315,13 @@
   }
 
   function renderMatchExplainer() {
+    if (!state.request.drop) {
+      el("matcher-title").textContent = "Destination required";
+      el("scoreValue").textContent = "0%";
+      el("scoreBar").style.width = "0%";
+      el("validationList").innerHTML = `<div><i>⌖</i><span>Enter a destination in the drop point field above</span></div><div><i>🕒</i><span>Or select from previous searches</span></div>`;
+      return;
+    }
     if (state.booking) {
       const booking = state.booking;
       el("matcher-title").textContent = "Booking constraints captured";
@@ -345,7 +378,7 @@
   function activeTripStops() {
     const pickupId = state.booking?.pickupStopId || state.request.pickup;
     const dropId = state.booking?.dropStopId || state.request.drop;
-    return { pickup: stopById(pickupId), drop: stopById(dropId) };
+    return { pickup: stopById(pickupId) || stops[1], drop: stopById(dropId) || null };
   }
 
   function tripMeta(status) {
@@ -472,11 +505,16 @@
   function renderSafeStopNote(pickupId = state.request.pickup, dropId = state.request.drop) {
     const pickup = stopById(pickupId);
     const drop = stopById(dropId);
-    const safe = hasApprovedStops(pickup, drop);
     const note = el("safeStopNote");
+    if (!dropId || !drop) {
+      note.classList.remove("unsafe");
+      note.innerHTML = `<span>⌖</span><p><strong>Choose your destination</strong><br />Select an approved drop stop to check onward route safety.</p>`;
+      return;
+    }
+    const safe = hasApprovedStops(pickup, drop);
     note.classList.toggle("unsafe", !safe);
     note.innerHTML = safe
-      ? `<span>✓</span><p><strong>Safe-stop check</strong><br />Pickup is on the ${pickup.roadSide} side of the road. Estimated walk: <span id="walkTime">${pickup.walk} min</span>.</p>`
+      ? `<span>✓</span><p><strong>Safe-stop check</strong><br />Pickup is on the ${pickup?.roadSide || "east"} side of the road. Estimated walk: <span id="walkTime">${pickup?.walk || 2} min</span>.</p>`
       : `<span>!</span><p><strong>Pickup cannot be used</strong><br />Choose an approved roadside pickup and drop point.</p>`;
   }
 
@@ -694,9 +732,16 @@
       showToast("An active demo ride is in progress", "Use Reset demo to create a different request.", "error");
       return;
     }
+    const dropVal = el("dropSelect").value || state.request.drop;
+    if (!dropVal) {
+      showToast("Drop point required", "Please choose your drop location from the search or history dropdown.", "error");
+      el("dropLocationText")?.focus();
+      window.LiftLocationPicker?.showDropHistorySuggestions();
+      return;
+    }
     state.request = {
       pickup: el("pickupSelect").value,
-      drop: el("dropSelect").value,
+      drop: dropVal,
       seats: Number(el("seatSelect").value),
       departure: el("departureSelect").value
     };
@@ -774,6 +819,7 @@
   }
 
   function replayRoute() {
+    window.dispatchEvent(new Event("lift:replay-driver"));
     const marker = el("driverMarker");
     const driver = state.booking ? getBookingDriver() : driverById(state.selectedDriverId || "asha");
     const routePoints = routeMarkerPoints(driver);
@@ -788,7 +834,7 @@
         setTimeout(() => { marker.style.transition = "left 1.1s cubic-bezier(.22,.9,.35,1), top 1.1s cubic-bezier(.22,.9,.35,1)"; syncMap(); }, 600);
       }
     }, 430);
-    showToast("Route replayed", "Simulated driver location is replaying along the planned corridor.");
+    showToast("Route replayed", "Driver Asha is approaching from Gandhipuram along the planned corridor.");
   }
 
   function bindEvents() {
@@ -826,13 +872,15 @@
     el("dropLocationButton").addEventListener("click", () => window.LiftLocationPicker?.open("drop"));
     window.addEventListener("lift:location-selected", (event) => {
       const { mode, stopId, address, stopName } = event.detail || {};
-      if (!mode || !stopById(stopId)) return;
-      state.request[mode] = stopId;
-      state.locationLabels[mode] = { address, stopName };
+      if (!mode) return;
+      if (stopId && stopById(stopId)) {
+        state.request[mode] = stopId;
+      }
+      state.locationLabels[mode] = { address: address || stopName || "", stopName: stopName || address || "" };
       setOptions();
       renderSafeStopNote();
-      syncMap();
-      showToast(`${mode === "pickup" ? "Pickup" : "Drop"} updated`, `Nearest approved pilot stop: ${stopName}.`);
+      renderAll();
+      showToast(`${mode === "pickup" ? "Pickup" : "Drop"} updated`, stopName ? `Nearest approved pilot stop: ${stopName}.` : "Location updated.");
     });
     const previewSafeStop = () => renderSafeStopNote(el("pickupSelect").value, el("dropSelect").value);
     el("pickupSelect").addEventListener("change", previewSafeStop);
