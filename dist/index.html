@@ -77,17 +77,37 @@
             </section>
 
             <section class="route-map card" aria-labelledby="map-title">
-              <div class="map-header"><div><p class="eyebrow">Route intelligence</p><h2 id="map-title">Plan your route</h2></div><span class="map-badge" id="mapBadge">Direct Road Route</span></div>
+              <div class="map-header">
+                <div>
+                  <p class="eyebrow">Route intelligence</p>
+                  <h2 id="map-title">Plan your route</h2>
+                </div>
+                <div class="map-header-actions">
+                  <span class="map-badge" id="mapBadge">Direct Road Route</span>
+                  <button class="open-gmaps-btn" id="openGoogleMapsHeaderBtn" type="button" title="Open turn-by-turn navigation in Google Maps app">
+                    <span>🗺️ Open in Google Maps ↗</span>
+                  </button>
+                </div>
+              </div>
               <div class="map-canvas" id="mapCanvas" aria-label="Route map">
                 <div id="googleMap" aria-label="Google Maps view"></div>
                 <div class="driver-map-badge" id="driverMapBadge"><span class="driver-badge-pulse"></span><span id="driverMapBadgeText">🚗 Driver Asha · Approaching · ETA ~3 min</span></div>
+                <button class="map-floating-action" id="openGoogleMapsFloatingBtn" type="button" title="Open in Google Maps app">
+                  <span>🗺️ Open in Google Maps App ↗</span>
+                </button>
                 <div class="map-label label-west">Gandhipuram</div><div class="map-label label-east">Saravanampatti</div><div class="map-road road-a"></div><div class="map-road road-b"></div><div class="map-road road-c"></div>
                 <svg class="route-svg" viewBox="0 0 620 360" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="routeGradient" x1="0%" x2="100%"><stop offset="0%" stop-color="#5fe2bb" /><stop offset="100%" stop-color="#55a5ff" /></linearGradient></defs><path d="M 55 275 C 118 238, 128 260, 183 224 S 250 205, 306 182 S 400 145, 440 165 S 510 138, 570 73" fill="none" stroke="url(#routeGradient)" stroke-width="11" stroke-linecap="round" /><path d="M 55 275 C 118 238, 128 260, 183 224 S 250 205, 306 182 S 400 145, 440 165 S 510 138, 570 73" fill="none" stroke="#d9ffef" stroke-opacity=".55" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 13" /></svg>
                 <div class="route-node node-start" data-stop="Gandhipuram"><span></span><b>G</b></div><div class="route-node node-nava" data-stop="Nava India"><span></span><b>N</b></div><div class="route-node node-peelamedu" data-stop="Peelamedu"><span></span><b>P</b></div><div class="route-node node-hope" data-stop="Hope College"><span></span><b>H</b></div><div class="route-node node-vilankurichi" data-stop="Vilankurichi"><span></span><b>V</b></div><div class="route-node node-end" data-stop="Saravanampatti"><span></span><b>S</b></div>
                 <div class="driver-marker" id="driverMarker" aria-label="Driver Asha current location"><span>◉</span><small>Asha</small></div>
                 <div class="map-legend"><span><i class="legend-route"></i> driver route</span><span><i class="legend-safe"></i> approved stop</span></div>
               </div>
-              <div class="map-footer"><div><span class="dot-online"></span> Driver last update <strong id="lastUpdate">8 sec ago</strong></div><button class="text-button" id="replayRoute">↻ Replay live route</button></div>
+              <div class="map-footer">
+                <div><span class="dot-online"></span> Driver last update <strong id="lastUpdate">8 sec ago</strong></div>
+                <div class="map-footer-actions">
+                  <button class="text-button" id="openGoogleMapsFooterBtn">🗺️ Google Maps app ↗</button>
+                  <button class="text-button" id="replayRoute">↻ Replay live route</button>
+                </div>
+              </div>
             </section>
           </div>
 

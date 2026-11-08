@@ -280,6 +280,21 @@
 
   window.addEventListener("lift:replay-driver", resetDriverReplay);
 
+  window.getLiftGoogleMapsUrl = () => {
+    const pickup = passengerLocations.pickup;
+    const drop = passengerLocations.drop;
+    const p = pickup?.point || { lat: 11.022917, lng: 76.982641 };
+    const d = drop?.point || { lat: 11.030327, lng: 77.020746 };
+    const origin = `${p.lat},${p.lng}`;
+    const destination = `${d.lat},${d.lng}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  };
+
+  window.openInGoogleMapsApp = () => {
+    const url = window.getLiftGoogleMapsUrl ? window.getLiftGoogleMapsUrl() : "https://www.google.com/maps";
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   window.initLiftGoogleMap = () => {
     const canvas = document.getElementById("googleMap");
     if (!canvas || !window.google?.maps) return;

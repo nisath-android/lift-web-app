@@ -899,6 +899,9 @@
       if (event.target.closest("#resetDemo")) { resetDemo(); }
     });
     el("replayRoute").addEventListener("click", replayRoute);
+    el("openGoogleMapsHeaderBtn")?.addEventListener("click", () => window.openInGoogleMapsApp?.());
+    el("openGoogleMapsFloatingBtn")?.addEventListener("click", () => window.openInGoogleMapsApp?.());
+    el("openGoogleMapsFooterBtn")?.addEventListener("click", () => window.openInGoogleMapsApp?.());
     el("publishPilotRoute").addEventListener("click", publishPilotRoute);
     el("refreshDriverOffers").addEventListener("click", refreshDriverOffers);
     el("helpButton").addEventListener("click", () => el("helpDialog").showModal());
