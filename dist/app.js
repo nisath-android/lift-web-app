@@ -199,6 +199,31 @@
     return selected || eligibleMatches()[0] || null;
   }
 
+  function updateLiveClock() {
+    const node = el("pilotTime");
+    if (!node) return;
+    const now = new Date();
+    const timeStr = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }).format(now);
+    const dateStr = new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(now);
+    node.textContent = `${dateStr} · ${timeStr}`;
+  }
+
+  function generateDepartureOptions() {
+    const now = new Date();
+    const formatTime = (d) => new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", hour12: true }).format(d);
+    const options = [
+      { value: `Now · ${formatTime(now)}`, label: `Now · ${formatTime(now)}` }
+    ];
+    [15, 30, 45, 60].forEach((mins) => {
+      const future = new Date(now.getTime() + mins * 60 * 1000);
+      options.push({
+        value: `In ${mins} mins · ${formatTime(future)}`,
+        label: `In ${mins} mins · ${formatTime(future)}`
+      });
+    });
+    return options;
+  }
+
   function setOptions() {
     const pickup = el("pickupSelect");
     const drop = el("dropSelect");
@@ -208,9 +233,18 @@
     pickup.value = state.request.pickup;
     drop.value = state.request.drop || "";
     el("seatSelect").value = String(state.request.seats);
-    el("departureSelect").value = state.request.departure;
+
+    const depEl = el("departureSelect");
+    if (depEl && (!depEl.dataset.dynamic || depEl.options.length <= 1)) {
+      const depOptions = generateDepartureOptions();
+      depEl.innerHTML = depOptions.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join("");
+      depEl.dataset.dynamic = "true";
+      state.request.departure = depOptions[0].value;
+    }
+
     renderLocationSummary("pickup");
     renderLocationSummary("drop");
+    updateLiveClock();
   }
 
   function renderLocationSummary(mode) {
@@ -537,12 +571,16 @@
     marker.setAttribute("aria-label", `Driver ${driver.name} current location`);
     const { pickup, drop } = activeTripStops();
     document.querySelectorAll(".route-node").forEach((node) => {
-      node.dataset.selected = [pickup.short, drop.short].includes(node.dataset.stop) ? "true" : "false";
+      node.dataset.selected = [pickup?.short, drop?.short].filter(Boolean).includes(node.dataset.stop) ? "true" : "false";
     });
     const walkTime = el("walkTime");
-    if (walkTime) walkTime.textContent = `${stopById(state.request.pickup).walk} min`;
+    if (walkTime) walkTime.textContent = `${stopById(state.request.pickup)?.walk || 2} min`;
     el("lastUpdate").textContent = `${state.lastUpdateSeconds} sec ago`;
-    el("map-title").textContent = `${stopById(driver.route[0]).short} → ${stopById(driver.route.at(-1)).short}`;
+    el("map-title").textContent = drop ? `${pickup?.short || "Pickup"} → ${drop?.short}` : `${pickup?.short || "Pickup"} → Where to?`;
+    const mapBadge = el("mapBadge") || document.querySelector(".map-badge");
+    if (mapBadge) {
+      mapBadge.textContent = drop ? "Direct Road Route" : "Select Destination";
+    }
   }
 
   function renderAll() {
@@ -888,7 +926,9 @@
   }
 
   function runClock() {
+    updateLiveClock();
     setInterval(() => {
+      updateLiveClock();
       state.lastUpdateSeconds = state.lastUpdateSeconds >= 19 ? 4 : state.lastUpdateSeconds + 1;
       const last = el("lastUpdate");
       if (last) last.textContent = `${state.lastUpdateSeconds} sec ago`;

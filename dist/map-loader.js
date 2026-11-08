@@ -177,6 +177,15 @@
       strokeWeight: 6
     });
 
+    const badge = document.getElementById("mapBadge") || document.querySelector(".map-badge");
+    if (badge) {
+      if (routeData?.distanceMeters) {
+        badge.textContent = `${(routeData.distanceMeters / 1000).toFixed(1)} km · Shortest Route`;
+      } else {
+        badge.textContent = "Direct Road Route";
+      }
+    }
+
     const bounds = new google.maps.LatLngBounds();
     points.forEach((point) => bounds.extend(point));
     if (driverVehicleMarker?.getPosition()) {
@@ -261,15 +270,6 @@
       zoom: 13,
       disableDefaultUI: true,
       gestureHandling: "cooperative"
-    });
-
-    // Render driver route corridor along the exact road network (green)
-    corridorPolyline = new google.maps.Polyline({
-      map,
-      path: corridorCoords,
-      strokeColor: "#10b981",
-      strokeOpacity: 0.85,
-      strokeWeight: 6
     });
 
     renderMarkers();
